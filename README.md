@@ -66,6 +66,17 @@ file and refuses to overwrite an existing one. Use `--no-launch` to create it
 without opening an application. `mcp` optionally exposes the same core operations
 over stdio; each initialized project includes an example configuration.
 
+## Agent-agnostic skill
+
+[skills/cad-git/SKILL.md](skills/cad-git/SKILL.md) explains the implemented tool and
+safe onboarding of an existing CAD folder. It includes native-capture and offline
+USD workflows, command references, and a read-only folder inventory helper.
+Any agent can read that file directly; no particular AI client or MCP setup is
+required. Example request: “Read this checkout's skills/cad-git/SKILL.md and onboard
+my existing design folder, preserving its native files.” The skill folder can also
+be copied into an agent's supported skill-discovery location; it is not installed
+globally by this repository.
+
 ## Storage and lineage
 
 ```text
