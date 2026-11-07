@@ -34,7 +34,7 @@ def create_native(project, ref, target, output, launch=True):
             executable=target.get('executable') or shutil.which('blender')
             if not executable or not Path(executable).exists():raise CadgitError('Configure the Blender executable in Settings')
             code='import bpy\nbpy.ops.wm.read_factory_settings(use_empty=True)\n'+blender_import_code(project,record['id'])
-            code+='\nbpy.ops.wm.save_as_mainfile(filepath='+repr(str(staged))+')\n'
+            code+='\nbpy.ops.file.make_paths_absolute()\nbpy.ops.wm.save_as_mainfile(filepath='+repr(str(staged))+',relative_remap=False)\n'
             runner=staging/'create.py';runner.write_text(code)
             result=subprocess.run([executable,'--background','--factory-startup','--python-exit-code','1','--python',str(runner)],capture_output=True,text=True,timeout=180)
             (staging/'creation.log').write_text(result.stdout+'\n'+result.stderr)
@@ -64,6 +64,10 @@ def create_native(project, ref, target, output, launch=True):
                 attrs.SetUserString('cadgit_source_snapshot',record['id']);attrs.SetUserString('cadgit_source_prim',part['path'])
                 binding=next((b for b in record.get('bindings',[]) if b['prim_path']==part['path']),None)
                 if binding:attrs.SetUserString('cadgit_material_revision',binding['material_revision'])
+                logical=next((b for b in record.get('library_bindings',[]) if b['prim_path']==part['path']),None)
+                if logical:
+                    attrs.SetUserString('cadgit_library_material_revision',logical['library_material_revision'])
+                    attrs.SetUserString('cadgit_library_appearance_source',logical.get('appearance_source','library'))
                 model.Objects.AddMesh(mesh,attrs)
             if not model.Write(str(staged),8):raise CadgitError('Rhino native file write failed')
             command=['open','-a',target.get('application','/Applications/Rhino 8.app'),str(output)]

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>CAD-GIT</title>
+  <desc>A solid cube connected to a branching version history on a dark tile.</desc>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="#151a20"/>
+  <path d="M32 776V248C32 129 129 32 248 32h528c119 0 216 97 216 216v528c0 119-97 216-216 216H248C129 992 32 895 32 776Z" fill="none" stroke="#34434f" stroke-width="12"/>
+  <path d="m454 190 244 141v282L454 754 210 613V331Z" fill="#233d50"/>
+  <path d="m454 190 244 141-244 141-244-141Z" fill="#9fdcff"/>
+  <path d="m454 472 244-141v282L454 754Z" fill="#208cc9"/>
+  <path d="M454 472 210 331v282l244 141Z" fill="#45677e"/>
+  <path d="m454 190 244 141v282L454 754 210 613V331Zm0 282v282M210 331l244 141 244-141" fill="none" stroke="#e4f4ff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M800 285v408c0 65-39 104-104 104H454" fill="none" stroke="#151a20" stroke-width="66" stroke-linecap="round"/>
+  <path d="M800 285v408c0 65-39 104-104 104H454" fill="none" stroke="#51c5ff" stroke-width="26" stroke-linecap="round"/>
+  <path d="M800 484h58" fill="none" stroke="#51c5ff" stroke-width="26" stroke-linecap="round"/>
+  <g fill="#151a20" stroke="#51c5ff" stroke-width="22">
+    <circle cx="800" cy="270" r="36"/>
+    <circle cx="866" cy="484" r="36"/>
+    <circle cx="454" cy="797" r="36"/>
+  </g>
+</svg>

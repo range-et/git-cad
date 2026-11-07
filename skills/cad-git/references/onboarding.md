@@ -1,14 +1,15 @@
 # Onboard an existing design folder
 
-The outcome is an initialized history store linked to real user files, with at
-least one verified baseline when an export is available. This does not recover
+The outcome is an initialized geometry and asset history store linked to real
+user files, with verified geometry baselines and material/image/spec revisions
+when those inputs are available. This does not recover
 unrecorded native history or automatically combine all files into main.
 
 ## 1. Inspect without reorganizing
 
 Establish the tool checkout/executable and the folder the user wants to onboard.
 Use the read-only helper to find native files, USD exports, other exchange assets,
-textures, existing project config and initialization collisions:
+textures, shader libraries, material specifications, existing project config and initialization collisions:
 
 ```sh
 python3 "/path/to/this/skill/scripts/inspect_folder.py" "/absolute/path/design-folder"
@@ -17,7 +18,9 @@ python3 "/path/to/this/skill/scripts/inspect_folder.py" "/absolute/path/design-f
 The helper reads names/config only; it does not open or export native documents.
 Its JSON is an inventory, not a validation of CAD-GIT data or native dependencies.
 Review the reported files and any unreadable paths. Follow existing references to
-external assets without moving them. Choose the intended base files, not every
+external assets without moving them. Classify `.blend` files as native working
+scenes or shader libraries; do not open every graph library as a model. Inventory
+material specifications and provider/license evidence alongside texture files. Choose the intended base files, not every
 backup or similarly named experiment. Ask for the choice only if it cannot be
 inferred from the user's request and available context.
 
@@ -28,7 +31,7 @@ If `cadgit.json` is present, or the helper finds a nested project config, run
 
 An existing folder can itself be the project root when it has no conflicting
 reserved paths. If it already has `history/`, `main/`, `materials/`, `artifacts/`,
-`assemblies/`, `.cadgit/` or `mcp.example.json` unrelated to CAD-GIT, choose a new
+`assemblies/`, `library/`, `.cadgit/` or `mcp.example.json` unrelated to CAD-GIT, choose a new
 child such as `cad-project/`. Native assets can stay outside that child.
 
 For example, keep this existing layout:
@@ -126,7 +129,20 @@ Confirm the expected source, native path when captured by an adapter, branch,
 trigger, warnings and successful verification. Do not edit manifests to disguise
 missing lineage. Historical native file versions are not archived by this process.
 
-## 4. Open the workflow and compose only when requested
+## 4. Port the material and asset library
+
+Read [material-library.md](material-library.md) when images, graphs, documents or
+material properties exist. Import chosen assets independently, create explicit
+logical material definitions, pin revision dependencies, and verify each revision.
+Do not infer one material per image or engineering values from a file's name.
+The materials workspace is a separate browser, not the geometry inspector's old
+captured-shader dropdown. Existing captured native shaders remain available.
+
+An otherwise usable geometry project can be handed off while an unavailable
+native renderer or missing property source is clearly marked incomplete. Do not
+invent data to make the material catalog look complete.
+
+## 5. Open the workflow and compose only when requested
 
 ```sh
 "$CADGIT_BIN" -p "$CADGIT_PROJECT" ui
@@ -144,13 +160,17 @@ user's captured data. The legacy `test/` fixtures in the checkout demonstrate
 exchange assets; the current `demo-project/` workflow is generated through `demo`.
 Neither should be copied wholesale as a migration.
 
-## 5. Hand off a usable project
+## 6. Hand off a usable project
 
 Provide a concise summary containing:
 
 - Tool executable and initialized project root.
 - Original base-file locations and the active app/branch bindings, if connected.
 - Verified baseline snapshot IDs, plus assembly/main/output IDs if actually created.
+- Material identities and exact material/image/graph/document revision IDs, including
+  source URLs/license status, physical-data sources/unknowns, and renderer validation.
+- Any appearances still using captured native overrides instead of the approved
+  library graph; do not silently revise materials or replace those edits.
 - Working start/UI/stop commands with this project's actual path.
 - Unavailable apps, capture warnings, or user choices still needed.
 

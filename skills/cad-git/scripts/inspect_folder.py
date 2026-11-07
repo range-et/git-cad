@@ -5,12 +5,13 @@ import json
 import os
 from pathlib import Path
 
-RESERVED=('history','assemblies','materials','artifacts','main','.cadgit','mcp.example.json')
+RESERVED=('library','history','assemblies','materials','artifacts','main','.cadgit','mcp.example.json')
 SKIP={'.git','.venv','venv','node_modules','__pycache__','.cadgit','.bridge','.pytest_cache'}
 GROUPS={
     'rhino':{'.3dm'},
     'blender':{'.blend'},
     'usd':{'.usd','.usda','.usdc','.usdz'},
+    'documents':{'.pdf','.txt','.md','.csv','.json','.yaml','.yml'},
     'backups':{'.blend1','.blend2','.3dmbak'},
     'other_exchange':{'.step','.stp','.iges','.igs','.obj','.stl','.fbx','.3mf','.fcstd','.sldprt','.sldasm'},
     'materials_and_images':{'.mtlx','.sbsar','.png','.jpg','.jpeg','.tif','.tiff','.exr','.hdr','.webp'},
@@ -55,11 +56,12 @@ def inspect_folder(folder,limit=200):
                 if len(symlinks)<limit:symlinks.append(str(child.relative_to(root)))
                 continue
             if name in SKIP or name.startswith('.cadgit-init-'):continue
-            if looks_initialized and name in {'history','assemblies','materials','artifacts','main'}:continue
+            if looks_initialized and name in {'library','history','assemblies','materials','artifacts','main'}:continue
             kept.append(name)
         dirs[:]=kept
         for name in sorted(files):
             child=here/name
+            if looks_initialized and name in {'cadgit.json','mcp.example.json'}:continue
             if child.is_symlink():
                 symlink_count+=1
                 if len(symlinks)<limit:symlinks.append(str(child.relative_to(root)))
@@ -78,7 +80,7 @@ def inspect_folder(folder,limit=200):
         'nested_project_configs':nested,
         'candidates':groups,'symlinks_not_followed':{'count':symlink_count,'paths':symlinks},
         'warnings':warnings,'path_limit_per_group':limit,
-        'note':'Read-only inventory; CAD-GIT status/init and actual exports provide validation. Native files and dependencies were not opened or modified.',
+        'note':'Read-only inventory; CAD-GIT status/init and actual exports provide validation. Native files and dependencies were not opened or modified. Classify .blend candidates as scenes or shader libraries before capture/import.',
     }
 
 

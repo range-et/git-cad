@@ -1,0 +1,85 @@
+{
+  "date": "2026-11-07",
+  "role": "independent materials/assets UX reviewer",
+  "scope": "isolated temporary Qt library workflows; no source edits or live native app changes",
+  "probes": [
+    "/tmp/git_cad_material_ux_audit.py",
+    "/tmp/git_cad_material_ux_perf.py"
+  ],
+  "findings": [
+    {
+      "priority": "P1",
+      "id": "MUI-01",
+      "file": "src/cadgit/library_ui.py",
+      "lines": "136-169",
+      "finding": "Filtering/search leaves stale inspector and mutation/assignment actions for an asset absent from cards.",
+      "evidence": "Images filter: grid_count=1, grid_current=null, inspected_kind=material, Use enabled. Nonmatching search: grid_count=0, same stale material/action.",
+      "fix": "Clear record, inspector/revision selection and actions when preserved selection is not in filtered cards."
+    },
+    {
+      "priority": "P1",
+      "id": "MUI-02",
+      "file": "src/cadgit/library_ui.py",
+      "lines": "44-96",
+      "finding": "No-op material editor roundtrip changes or discards existing supported/future metadata.",
+      "evidence": {
+        "structured_conditions": "dict becomes JSON string",
+        "native_graph": "valid .mtlx shader ref disappears because chooser only lists .blend",
+        "map_fields": "uv_set/extensions dropped; ACEScg becomes raw",
+        "documents": "reference objects become bare IDs",
+        "preview": "RGB floats quantized to 8-bit, roughness .4567\u2192.46, metallic .1234\u2192.12"
+      },
+      "fix": "Preserve original objects/precision for untouched fields; retain unsupported combo choices; update only edited fields; parse deliberately edited structured values."
+    },
+    {
+      "priority": "P1",
+      "id": "MUI-03",
+      "file": "src/cadgit/library_ui.py",
+      "lines": "227-235",
+      "finding": "Partial batch-import error is overwritten by final success selection.",
+      "evidence": "Import valid PNG then missing PNG; visible status only Saved immutable revision <id>.",
+      "fix": "Retain aggregate outcome with committed successes/IDs and failed path after refreshing."
+    },
+    {
+      "priority": "P2",
+      "id": "MUI-04",
+      "file": "src/cadgit/library_ui.py",
+      "lines": "127-155,232-240",
+      "finding": "Synchronous unindexed scans and full thumbnail verification block Qt on every search change.",
+      "evidence": {
+        "assets": 60,
+        "image_dimensions": "8x8",
+        "initial_seconds": 0.82,
+        "single_search_change_seconds": 0.672
+      },
+      "fix": "Cache/index immutable records, cache thumbnails, debounce search; move larger import/verification work off UI thread with selection-generation guards."
+    },
+    {
+      "priority": "P2",
+      "id": "MUI-05",
+      "file": "src/cadgit/library_ui.py",
+      "lines": "177-180",
+      "finding": "Native-graph-only material is labeled physical-only, and white preview colors produce white text on white.",
+      "evidence": "Code inspection of material preview branch.",
+      "fix": "Use independent engineering/appearance status labels and contrast-aware swatch text."
+    },
+    {
+      "priority": "P2",
+      "id": "MUI-06",
+      "file": "src/cadgit/library_ui.py",
+      "lines": "194-202",
+      "finding": "Lineage entries emphasize opaque IDs rather than donor labels; revisions, parents and dependencies share one flat list.",
+      "evidence": "Code inspection; details show dependency labels but history parent rows only role/ID.",
+      "fix": "Group revisions/derived-from/pinned-inputs, show donor label + revision, preserve navigation."
+    }
+  ],
+  "positive_results": [
+    "Separate project-wide workspace and explicit type filters exist.",
+    "Geometry-only header controls hide in library workspace.",
+    "Images are first-class independently revised cards.",
+    "Native graph fidelity caveat is visible.",
+    "Provenance defaults license to unknown and external source opening is restricted to http/https.",
+    "Image reader rejects >40 million-pixel preview dimensions."
+  ],
+  "status": "Findings sent to parent; ready to recheck after fixes"
+}

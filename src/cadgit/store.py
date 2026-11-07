@@ -101,7 +101,7 @@ class Project:
         root = Path(root).expanduser().resolve(); root.mkdir(parents=True, exist_ok=True)
         if (root / "cadgit.json").exists(): return cls(root)
         # Init must not commandeer another tool's folders or overwrite files.
-        reserved=['history','assemblies','materials','artifacts','main','.cadgit','mcp.example.json']
+        reserved=['library','history','assemblies','materials','artifacts','main','.cadgit','mcp.example.json']
         conflicts=[str(root/name) for name in reserved if (root/name).exists() or (root/name).is_symlink()]
         if conflicts:raise CadgitError('Initialization would conflict with existing paths: '+', '.join(conflicts)+'. Choose an empty project subfolder.')
         import tempfile
@@ -273,6 +273,49 @@ class Project:
                     native_materials[entry["name"]] = mid
                 meta["native_materials"] = native_materials
                 r = Snapshot(id=sid, source=source, branch=branch, parent=tip["id"] if tip else read_json(self.root / "cadgit.json").get("branches", {}).get(source, {}).get(branch, {}).get("base"), created_at=timestamp, committed_at=now(),commit_sequence=max((r.get("commit_sequence",0) or 0 for r in existing),default=0)+1, label=label or filepath.stem, trigger=meta.pop("trigger", "ingest"), metadata=meta).model_dump()
+                from .library import Library,FEATURE
+                from pxr import UsdGeom,UsdShade,Tf
+                library_bindings=[];native_bindings=[];native_by_prim={};aliases={}
+                for name,revision in native_materials.items():aliases.setdefault(Tf.MakeValidIdentifier(name),[]).append(revision)
+                captured_stage=Usd.Stage.Open(Usd.Stage.Open(str(staging/'scene.usdz')).Flatten());canonicalized=False
+                for prim in captured_stage.Traverse():
+                    if not prim.IsA(UsdGeom.Mesh):continue
+                    logical=prim.GetAttribute('userProperties:cadgit:library_material_revision').Get()
+                    captured_revision=None
+                    if native_materials:
+                        bound=UsdShade.MaterialBindingAPI(prim).ComputeBoundMaterial()[0]
+                        if bound:
+                            name=bound.GetPrim().GetName();candidates=aliases.get(name,[])
+                            if len(candidates)!=1:raise CadgitError('Cannot map captured native material unambiguously: '+name+'. Capture retained for recovery; material names may collide after USD sanitization.')
+                            captured_revision=candidates[0]
+                        elif logical:
+                            raise CadgitError('Logical material capture has no single bound native material; per-face native graph restoration is unsupported')
+                    elif not (meta.get('native_capture') and source=='blender'):
+                        captured_revision=prim.GetAttribute('userProperties:cadgit:material_revision').Get()
+                        if captured_revision:
+                            material=next((m for m in self.records('materials') if m['id']==captured_revision),None)
+                            if material is None or not self.verify(material)['ok']:raise CadgitError('Referenced captured shader is missing or corrupt: '+captured_revision)
+                    if captured_revision:
+                        prim.CreateAttribute('userProperties:cadgit:material_revision',Sdf.ValueTypeNames.String).Set(captured_revision);canonicalized=True
+                        native_by_prim[str(prim.GetPath())]=captured_revision
+                        native_bindings.append({'prim_path':str(prim.GetPath()),'material_revision':captured_revision})
+                    elif meta.get('native_capture') and source=='blender' and prim.HasAttribute('userProperties:cadgit:material_revision'):
+                        prim.RemoveProperty('userProperties:cadgit:material_revision');canonicalized=True
+                    if logical:
+                        Library(self)._require(logical,{'material'})
+                        policy=prim.GetAttribute('userProperties:cadgit:library_appearance_source').Get()
+                        if policy not in (None,'library','captured_native'):raise CadgitError('Unsupported logical appearance policy: '+str(policy))
+                        captured=bool(captured_revision) or (meta.get('native_capture') and source=='blender') or policy=='captured_native'
+                        policy='captured_native' if captured else 'library'
+                        prim.CreateAttribute('userProperties:cadgit:library_appearance_source',Sdf.ValueTypeNames.String).Set(policy);canonicalized=True
+                        library_bindings.append({'prim_path':str(prim.GetPath()),'library_material_revision':logical,'appearance_source':policy})
+                if canonicalized:
+                    canonical=staging/'canonical.usda';captured_stage.Export(str(canonical))
+                    if not UsdUtils.CreateNewUsdzPackage(Sdf.AssetPath(str(canonical)),str(staging/'canonical.usdz')):raise CadgitError('Cannot package canonical material bindings')
+                    os.replace(staging/'canonical.usdz',staging/'scene.usdz');canonical.unlink()
+                if native_bindings:r['bindings']=native_bindings
+                r['metadata']['native_materials_by_prim']=native_by_prim
+                if library_bindings:r.update(library_bindings=library_bindings,required_features=[FEATURE])
                 dest = self.root / "history/sources" / source / (r["created_at"].replace(":", "-") + "_" + sid)
                 return self.commit(staging, dest, r)
             except Exception as e:
@@ -369,6 +412,11 @@ class Project:
             if relative in listed:errors.append('Duplicate inventory path: '+relative)
             listed.add(relative)
             if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest()!=file.get('sha256'):errors.append('Hash mismatch: '+relative)
+        images=record.get('images',{})
+        if not isinstance(images,dict):errors.append('Invalid image inventory mapping')
+        else:
+            for relative in images.values():
+                if not isinstance(relative,str) or Path(relative).is_absolute() or '..' in Path(relative).parts or relative not in listed:errors.append('Image reference is not covered by the archive inventory: '+str(relative))
         if entry and entry not in listed:errors.append('Entry layer is not covered by the files inventory: '+entry)
         marker=base/'COMMITTED'
         try:
@@ -390,4 +438,10 @@ class Project:
                 if revision not in materials:errors.append('Missing or incompatible material revision: '+str(revision));continue
                 result=self.verify(materials[revision],stack)
                 if not result['ok']:errors.append('Material '+str(revision)+': '+'; '.join(result['errors']))
+        if record.get('library_bindings'):
+            from .library import Library
+            library=Library(self)
+            for binding in record['library_bindings']:
+                result=library.verify(binding['library_material_revision'])
+                if not result['ok']:errors.append('Library material: '+'; '.join(result['errors']))
         return {'id':record['id'],'ok':not errors,'errors':errors}

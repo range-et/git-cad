@@ -14,7 +14,9 @@ def cadgit_capture(trigger='user_save'):
     seq_tmp.write_text(json.dumps({'sequence':sequence}));os.replace(seq_tmp,seq_file)
     try:
         # Runs synchronously on Blender's main thread at the save-post boundary.
-        result=bpy.ops.wm.usd_export(filepath=str(directory/'scene.usda'),export_materials=True,generate_materialx_network=True)
+        options={'filepath':str(directory/'scene.usda'),'export_materials':True,'generate_materialx_network':True}
+        if 'export_custom_properties' in bpy.ops.wm.usd_export.get_rna_type().properties:options['export_custom_properties']=True
+        result=bpy.ops.wm.usd_export(**options)
         if 'FINISHED' not in result: raise RuntimeError('USD export did not finish')
         material_map={}; warnings=[]
         materials={m for o in bpy.context.scene.objects if o.type=='MESH' for m in o.data.materials if m}

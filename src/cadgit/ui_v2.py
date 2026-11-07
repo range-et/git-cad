@@ -117,8 +117,8 @@ class Window(W.QMainWindow):
         self.setWindowTitle('CAD-GIT • '+project.config['name']);self.resize(1470,960);self.setMinimumSize(1000,640);self.colors=theme(W.QApplication.instance())
         root=W.QWidget();self.setCentralWidget(root);layout=W.QVBoxLayout(root);layout.setContentsMargins(16,14,16,8);layout.setSpacing(10)
         header=W.QHBoxLayout();header.addWidget(label('CAD—GIT','brand'));header.addSpacing(18);header.addWidget(label(project.config['name'],'title'));header.addStretch()
-        header.addWidget(tip(button('+ Add USD file…',self.ingest_dialog),'Record a whole USD file as an immutable version. Its meshes can then be selected in a tab.'))
-        header.addWidget(tip(button('Watch native saves…',self.connect_apps),'Attach the installed application adapters. Normal native saves create full USD snapshots.'))
+        self.add_usd_button=tip(button('+ Add USD file…',self.ingest_dialog),'Record a whole USD file as an immutable version. Its meshes can then be selected in a tab.');header.addWidget(self.add_usd_button)
+        self.watch_button=tip(button('Watch native saves…',self.connect_apps),'Attach the installed application adapters. Normal native saves create full USD snapshots.');header.addWidget(self.watch_button)
         self.open_menu=W.QToolButton();self.open_menu.setText('Open with…');self.open_menu.setPopupMode(W.QToolButton.InstantPopup);tip(self.open_menu,'Create a new native file from the current USD. Applications do not need to understand CAD-GIT history.');header.addWidget(self.open_menu)
         header.addWidget(tip(button('Settings',self.settings),'Configure external application targets and the light/dark theme.'));layout.addLayout(header)
         self.workbench_splitter=W.QSplitter(QtCore.Qt.Vertical);self.workbench_splitter.setChildrenCollapsible(False);layout.addWidget(self.workbench_splitter,1)
@@ -164,6 +164,14 @@ class Window(W.QMainWindow):
             divider.setHandleWidth(9)
             for index in range(1,divider.count()):divider.handle(index).setToolTip('Drag to resize panels')
         self.restore_layout()
+        from .library_ui import LibraryWidget
+        index=layout.indexOf(self.workbench_splitter);layout.removeWidget(self.workbench_splitter)
+        self.workspace_tabs=W.QTabWidget();self.geometry_page=W.QWidget();geometry_layout=W.QVBoxLayout(self.geometry_page);geometry_layout.setContentsMargins(0,0,0,0);geometry_layout.addWidget(self.workbench_splitter)
+        self.library_browser=LibraryWidget(project);self.library_browser.materialSelected.connect(self.use_library_material);self.library_browser.changed.connect(self.refresh)
+        self.workspace_tabs.addTab(self.geometry_page,'Geometry');self.workspace_tabs.addTab(self.library_browser,'Materials && Assets');layout.insertWidget(index,self.workspace_tabs,1);self.workspace_tabs.currentChanged.connect(self.workspace_changed)
+        settings=self.layout_settings();library_state=settings.value('library_splitter')
+        if library_state is not None:self.library_browser.splitter.restoreState(library_state)
+        self.workspace_tabs.setCurrentIndex(1 if os.environ.get('CADGIT_WORKSPACE')=='library' else int(settings.value('workspace',0)))
         self.statusBar().showMessage('Ready • double-click any history version to open it in a tab')
         self.refresh();self.reload_open_menu()
         file=project.root/'.cadgit/drafts/current.json'
@@ -185,6 +193,18 @@ class Window(W.QMainWindow):
             warning=W.QLabel('Draft recovery needed. Original data has been preserved.');warning.setToolTip(draft_error);warning.setWordWrap(True);layout.insertWidget(1,warning);self.statusBar().showMessage(draft_error)
         QtCore.QTimer.singleShot(100,self.open_initial)
         self.timer=QtCore.QTimer(self);self.timer.timeout.connect(self.poll);self.timer.start(1600)
+    def workspace_changed(self,index):
+        geometry=index==0
+        for widget in [self.add_usd_button,self.watch_button,self.open_menu]:widget.setVisible(geometry)
+        if not geometry:self.library_browser.refresh()
+    def use_library_material(self,revision):
+        self.refresh()
+        value={'library_material_revision':revision}
+        index=self.material_combo.findData(value)
+        if index<0:
+            from .library import Library
+            record=Library(self.project).get(revision);self.material_combo.addItem(record['label']+' • r'+str(record['revision_number']),value);index=self.material_combo.count()-1
+        self.material_combo.setCurrentIndex(index);self.workspace_tabs.setCurrentIndex(0);self.statusBar().showMessage('Material selected for new pieces only; existing draft pieces remain pinned.')
     def layout_settings(self):
         settings=QtCore.QSettings('CAD-GIT','Workbench');settings.beginGroup(self.project.config['id']);return settings
     def restore_layout(self):
@@ -195,9 +215,11 @@ class Window(W.QMainWindow):
             if state is not None:getattr(self,name+'_splitter').restoreState(state)
     def closeEvent(self,event):
         self._closing=True
+        self.library_browser.shutdown()
         if hasattr(self,'timer'):self.timer.stop()
         settings=self.layout_settings();settings.setValue('geometry',self.saveGeometry())
         for name in ['workbench','columns','inspector']:settings.setValue(name,getattr(self,name+'_splitter').saveState())
+        settings.setValue('workspace',self.workspace_tabs.currentIndex());settings.setValue('library_splitter',self.library_browser.splitter.saveState())
         settings.sync();super().closeEvent(event)
     def job(self,fn,done,on_error=None):
         if self._closing:return
@@ -254,12 +276,16 @@ class Window(W.QMainWindow):
         self.graph_warning.setText('History needs attention: '+'; '.join(graph.get('warnings',[])));self.graph_warning.setVisible(bool(graph.get('warnings')))
         self._history_signature=self.history_signature()
         material=self.material_combo.currentData();self.material_combo.clear();self.material_combo.addItem('Keep source materials',None)
-        for m in materials:self.material_combo.addItem(m['label']+' · '+m['id'][-6:],m['id'])
+        for m in materials:self.material_combo.addItem('Captured shader: '+m['label']+' · '+m['id'][-6:],m['id'])
+        from .library import Library
+        for m in Library(self.project).records():
+            if m['kind']=='material':self.material_combo.addItem(m['label']+' • r'+str(m['revision_number']),{'library_material_revision':m['id']})
         index=self.material_combo.findData(material)
         if index>=0:self.material_combo.setCurrentIndex(index)
         self.filter_history()
+        if hasattr(self,'library_browser') and self.workspace_tabs.currentIndex()==1:self.library_browser.refresh()
     def history_signature(self):
-        files=[self.project.root/'cadgit.json',self.project.root/'main/current.json']
+        files=[self.project.root/'cadgit.json',self.project.root/'main/current.json',self.project.root/'library/revisions',self.project.root/'materials']
         return (len(self.project.records(strict=False)),len(self.project.records('assemblies',strict=False)),*(p.stat().st_mtime_ns if p.exists() else 0 for p in files))
     def poll(self):
         if self._closing:return
@@ -413,14 +439,21 @@ class Window(W.QMainWindow):
         paths=sorted(tab.selected,key=len);paths=[p for i,p in enumerate(paths) if not any(p.startswith(parent+'/') for parent in paths[:i])]
         for path in paths:
             if not any(p['path']==path or p['path'].startswith(path+'/') for p in tab.parts):continue
-            self.draft.append(Selection(snapshot_id=tab.record['id'],prim_path=path,label=path.split('/')[-1],material_revision=self.material_combo.currentData()).model_dump())
+            choice=self.material_combo.currentData();logical=choice.get('library_material_revision') if isinstance(choice,dict) else None
+            self.draft.append(Selection(snapshot_id=tab.record['id'],prim_path=path,label=path.split('/')[-1],material_revision=choice if isinstance(choice,str) else None,library_material_revision=logical).model_dump())
         self.update_tray();self.statusBar().showMessage('Added to assembly. Open another version tab to add more geometry.')
     def update_tray(self,persist=True):
         self.table.setRowCount(len(self.draft))
         for row,s in enumerate(self.draft):
             try:r=self.project.resolve(s['snapshot_id']);source=self.native_name(r)+' · '+r['id'][-6:]
             except Exception:source=s['snapshot_id']
-            for col,text in enumerate([s['label'],source,str(s.get('translation',[0,0,0])),s.get('material_revision') or 'Source']):
+            material=s.get('material_revision') or 'Source'
+            if s.get('library_material_revision'):
+                try:
+                    from .library import Library
+                    record=Library(self.project).get(s['library_material_revision']);material=record['label']+' • r'+str(record['revision_number'])
+                except CadgitError:material=s['library_material_revision']
+            for col,text in enumerate([s['label'],source,str(s.get('translation',[0,0,0])),material]):
                 item=W.QTableWidgetItem(str(text));item.setToolTip(s['prim_path']+'\n'+str(text));self.table.setItem(row,col,item)
         if persist:
             try:atomic_json(self.project.root/'.cadgit/drafts/current.json',self.draft)
@@ -573,5 +606,8 @@ class Window(W.QMainWindow):
 
 
 def launch(root,screenshot=None):
-    app=W.QApplication.instance() or W.QApplication([]);app.setApplicationName('CAD-GIT')
+    from .app_identity import configure_application_identity,configure_application_icon
+    configure_application_identity()
+    app=W.QApplication.instance() or W.QApplication([])
+    configure_application_icon(app)
     window=Window(Project(root),screenshot);window.show();return app.exec()

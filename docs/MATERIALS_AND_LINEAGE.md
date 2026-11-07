@@ -4,6 +4,10 @@ Status: proposed design, 2026-11-07. This extends the
 [first-release specification](SPECIFICATION.md). It replaces the earlier idea
 that all material requirements can be reduced to one PBR parameter subset.
 
+The implemented V1 subset is documented in [Materials & Assets V1](MATERIAL_LIBRARY_V1.md).
+This broader design also includes future solver representations and assignment
+features; those are not all implemented.
+
 ## 1. Material identity is distinct from its representations
 
 A project material is a versioned asset with one or more independent facets:

@@ -10,6 +10,8 @@ assembly_app=typer.Typer();app.add_typer(assembly_app,name='assembly')
 main_app=typer.Typer();app.add_typer(main_app,name='main')
 material_app=typer.Typer();app.add_typer(material_app,name='material')
 branch_app=typer.Typer();app.add_typer(branch_app,name='branch')
+from .library_cli import app as library_app
+app.add_typer(library_app,name='library')
 
 def emit(value):typer.echo(json.dumps(value,indent=2,default=str))
 
@@ -85,13 +87,13 @@ def view(ctx:typer.Context,ref:str):
     os.environ['CADGIT_INITIAL_REF']=r['id'];raise typer.Exit(launch(p.root))
 
 @app.command()
-def compose(ctx:typer.Context,inputs:list[str]=typer.Option(...,'--input'),name:str='New assembly'):
+def compose(ctx:typer.Context,inputs:list[str]=typer.Option(...,'--input'),name:str='New assembly',library_material:Optional[str]=None):
     from .usd import assemble
     selections=[]
     for value in inputs:
         if ':/' not in value:raise typer.BadParameter('Use SNAPSHOT:/Prim/Path')
         ref,prim=value.split(':',1)
-        selections.append({'snapshot_id':project(ctx).resolve(ref)['id'],'prim_path':prim,'label':prim.split('/')[-1]})
+        selections.append({'snapshot_id':project(ctx).resolve(ref)['id'],'prim_path':prim,'label':prim.split('/')[-1],'library_material_revision':library_material})
     emit(assemble(project(ctx),selections,name))
 
 @assembly_app.command('list')

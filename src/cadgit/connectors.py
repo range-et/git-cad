@@ -115,6 +115,17 @@ def blender_import_code(project, ref):
             material=UsdShade.MaterialBindingAPI(prim).ComputeBoundMaterial()[0]
             revision=record['metadata']['native_materials'].get(material.GetPrim().GetName()) if material else None
             if revision:record['bindings'].append({'prim_path':str(prim.GetPath()),'material_revision':revision})
+    record=dict(record);record['bindings']=list(record.get('bindings',[]));library_materials={}
+    if record.get('library_bindings'):
+        from .library import Library
+        library=Library(project)
+        captured_paths={binding['prim_path'] for binding in record['bindings']}
+        for binding in record['library_bindings']:
+            if binding['prim_path'] in captured_paths or binding.get('appearance_source')=='captured_native':continue
+            revision=binding['library_material_revision'];descriptor=library.native_shader(revision)
+            if descriptor:
+                key='library_'+revision;library_materials[key]=descriptor
+                record['bindings'].append({'prim_path':binding['prim_path'],'material_revision':key})
     import_path=project.stage_path(record)
     if record.get('bindings'):
         # Native material identity is shared by many meshes. Give each imported
@@ -133,6 +144,7 @@ def blender_import_code(project, ref):
         projected.Export(str(import_path))
     code = "import bpy,json\nfrom pathlib import Path\n"
     code += "record=" + repr({k:v for k,v in record.items() if not k.startswith('_')}) + "\n"
+    code += "library_materials="+repr(library_materials)+"\n"
     code += "root=Path(" + repr(str(project.root)) + ")\n"
     code += "path=" + repr(str(import_path)) + "\n"
     code += '''before=set(bpy.data.objects)
@@ -140,14 +152,23 @@ bpy.ops.wm.usd_import(filepath=path,property_import_mode='ALL',create_collection
 imported=[o for o in bpy.data.objects if o not in before]
 restored=[]
 materials_by_revision={}
+original_image_names={}
 def restore_images(tree,manifest,mid,visited=None):
     visited=visited if visited is not None else set()
     if tree is None or tree in visited:return
     visited.add(tree)
     for node in tree.nodes:
         image=getattr(node,'image',None)
-        if image and image.name in manifest.get('images',{}):
-            image.filepath=str(root/'materials'/mid/manifest['images'][image.name])
+        if image:
+            pointer=image.as_pointer() if hasattr(image,'as_pointer') else id(image)
+            original=original_image_names.get(pointer)
+            weak=getattr(image,'library_weak_reference',None)
+            if original is None and weak and Path(weak.filepath).resolve()==Path(manifest['_blend_path']).resolve():
+                original=weak.id_name[2:] if weak.id_name.startswith('IM') else None
+            if original is None and not weak:original=image.name
+            if original in manifest.get('images',{}):image.filepath=str(root/'materials'/mid/manifest['images'][original])
+            elif not getattr(image,'packed_file',None) and not getattr(image,'packed_files',[]) and getattr(image,'source','FILE') not in {'GENERATED','VIEWER'}:
+                raise RuntimeError('Native graph image is not pinned to archived bytes: '+str(original or image.name)+'. Bind its original image name in the material graph_images map.')
         child=getattr(node,'node_tree',None)
         if child:restore_images(child,manifest,mid,visited)
 for binding in record.get('bindings',[]):
@@ -163,11 +184,19 @@ for binding in record.get('bindings',[]):
     if len(targets)!=1:
         raise RuntimeError('Cannot restore historical material unambiguously: '+str(binding)+' candidate count '+str(len(targets)))
     if mid not in materials_by_revision:
-        manifest=json.loads((root/'materials'/mid/'manifest.json').read_text())
-        with bpy.data.libraries.load(str(root/'materials'/mid/'material.blend'),link=False) as (src,dst):
+        descriptor=library_materials.get(mid)
+        manifest={'label':descriptor.get('material_name'),'images':descriptor['images']} if descriptor else json.loads((root/'materials'/mid/'manifest.json').read_text())
+        blend_path=descriptor['path'] if descriptor else str(root/'materials'/mid/'material.blend')
+        manifest['_blend_path']=blend_path
+        requested_images=[]
+        with bpy.data.libraries.load(blend_path,link=False) as (src,dst):
+            requested_images=[name for name in getattr(src,'images',[]) if name in manifest.get('images',{})]
+            if requested_images:dst.images=requested_images[:]
             names=[manifest['label']] if manifest.get('label') in src.materials else src.materials if len(src.materials)==1 else []
             if not names:raise RuntimeError('Cannot identify archived material '+mid)
             dst.materials=names[:1]
+        for original,image in zip(requested_images,getattr(dst,'images',[])):
+            if image:original_image_names[image.as_pointer() if hasattr(image,'as_pointer') else id(image)]=original
         mat=dst.materials[0]
         if not mat:raise RuntimeError('Archived material could not be loaded: '+mid)
         restore_images(mat.node_tree,manifest,mid)

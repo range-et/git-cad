@@ -54,6 +54,10 @@ def cadgit_export(doc,directory,metadata):
             if material_revision:lines.append('')
             lines.extend(['def Mesh "'+name+'" {','custom string cadgit:sourceObject = '+json.dumps(str(obj.Id)),'custom string cadgit:objectName = '+json.dumps(obj.Attributes.Name or ''),'point3f[] points = '+str(points),'int[] faceVertexCounts = '+str(counts),'int[] faceVertexIndices = '+str(indices),'uniform token subdivisionScheme = "none"'])
             if material_revision:lines.append('custom string userProperties:cadgit:material_revision = '+json.dumps(material_revision))
+            logical_revision=obj.Attributes.GetUserString('cadgit_library_material_revision')
+            if logical_revision:
+                lines.append('custom string userProperties:cadgit:library_material_revision = '+json.dumps(logical_revision))
+                lines.append('custom string userProperties:cadgit:library_appearance_source = '+json.dumps(obj.Attributes.GetUserString('cadgit_library_appearance_source') or 'library'))
             lines.append('}')
         lines.append('}')
         if unsupported:raise RuntimeError('USD snapshot incomplete: unsupported Rhino geometry '+', '.join(unsupported))

@@ -26,6 +26,12 @@ payloads. The application's package/UI version is independent of the data format
 Historical material fixtures without a version field remain readable through the
 legacy-record path. New project configurations must have an explicit major version.
 
+Logical material assignments use `cadgit.material-library.v1` in
+`required_features`, including selections saved in draft recipes. Assemblies and
+asset revisions carry the same gate. Older readers must reject these semantics
+rather than silently discard a logical material assignment. Legacy captured
+native shader IDs retain their original meaning.
+
 ## Preserve unfamiliar data
 
 Typed models retain unfamiliar fields when validating and serializing. Readers

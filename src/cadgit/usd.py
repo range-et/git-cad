@@ -85,6 +85,33 @@ def stage_info(path):
     return {"prims": items, "units": UsdGeom.GetStageMetersPerUnit(stage), "up_axis": str(UsdGeom.GetStageUpAxis(stage)), "unsupported_types": unsupported}
 
 
+def bind_library_preview(stage,target,material,library,path):
+    """Project supported appearance into USD; retain native graphs separately."""
+    appearance=material['definition'].get('appearance',{})
+    if not appearance:return
+    stage.DefinePrim('/World/Looks','Scope')
+    usd_material=UsdShade.Material.Define(stage,path)
+    if not stage.GetPrimAtPath(path+'/Preview'):
+        preview=appearance.get('preview',{})
+        shader=UsdShade.Shader.Define(stage,path+'/Preview');shader.CreateIdAttr('UsdPreviewSurface')
+        shader.CreateInput('diffuseColor',Sdf.ValueTypeNames.Color3f).Set(Gf.Vec3f(*preview.get('base_color',[.65,.65,.65])))
+        for key,default in [('roughness',.4),('metallic',0.),('opacity',1.)]:shader.CreateInput(key,Sdf.ValueTypeNames.Float).Set(float(preview.get(key,default)))
+        usd_material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(),'surface')
+        channels={'base_color':('diffuseColor','rgb',Sdf.ValueTypeNames.Float3),'roughness':('roughness','r',Sdf.ValueTypeNames.Float),'metallic':('metallic','r',Sdf.ValueTypeNames.Float),'opacity':('opacity','r',Sdf.ValueTypeNames.Float)}
+        from .library import reference
+        for role,value in appearance.get('maps',{}).items():
+            if role not in channels:continue
+            if isinstance(value,dict) and value.get('color_space','raw') not in {'raw','sRGB','auto'}:continue
+            image=library.get(reference(value));texture=UsdShade.Shader.Define(stage,path+'/Map_'+role);texture.CreateIdAttr('UsdUVTexture')
+            texture.CreateInput('file',Sdf.ValueTypeNames.Asset).Set(Sdf.AssetPath(str(library.project.stage_path(image))))
+            texture.CreateInput('sourceColorSpace',Sdf.ValueTypeNames.Token).Set(value.get('color_space','sRGB' if role=='base_color' else 'raw') if isinstance(value,dict) else ('sRGB' if role=='base_color' else 'raw'))
+            reader=UsdShade.Shader.Define(stage,path+'/ST_'+role);reader.CreateIdAttr('UsdPrimvarReader_float2');reader.CreateInput('varname',Sdf.ValueTypeNames.Token).Set(value.get('uv_set','st') if isinstance(value,dict) else 'st');reader.CreateOutput('result',Sdf.ValueTypeNames.Float2)
+            texture.CreateInput('st',Sdf.ValueTypeNames.Float2).ConnectToSource(reader.ConnectableAPI(),'result')
+            input_name,output_name,value_type=channels[role];texture.CreateOutput(output_name,value_type)
+            shader.GetInput(input_name).ConnectToSource(texture.ConnectableAPI(),output_name)
+    UsdShade.MaterialBindingAPI.Apply(target).Bind(usd_material)
+
+
 def assemble(project, selections, label="Untitled assembly"):
     try:selections = [Selection.model_validate(s) for s in selections]
     except ValueError as exc:raise CadgitError('Invalid assembly selection: '+str(exc)) from exc
@@ -96,8 +123,12 @@ def assemble(project, selections, label="Untitled assembly"):
         stage = Usd.Stage.CreateNew(str(staging / "scene.usda"))
         root = UsdGeom.Xform.Define(stage, "/World"); stage.SetDefaultPrim(root.GetPrim())
         UsdGeom.SetStageUpAxis(stage, "Z"); UsdGeom.SetStageMetersPerUnit(stage, 1.0)
-        warnings = []; bindings = []
+        warnings = []; bindings = [];library_bindings=[]
+        from .library import Library,FEATURE
+        library=Library(project)
         for n, sel in enumerate(selections):
+            if sel.material_revision and sel.library_material_revision:raise CadgitError('Choose a library material or a captured shader, not both')
+            chosen_library=library._require(sel.library_material_revision,{'material'}) if sel.library_material_revision else None
             record = project.resolve(sel.snapshot_id)
             sel.snapshot_id = record["id"]
             if not project.verify(record["id"])["ok"]: raise CadgitError("Source hash verification failed")
@@ -130,7 +161,25 @@ def assemble(project, selections, label="Untitled assembly"):
                     stage.DefinePrim("/World/Looks", "Scope")
                     if not stage.GetPrimAtPath(mat_dest): Sdf.CopySpec(flat, bound.GetPath(), stage.GetRootLayer(), mat_dest)
                     UsdShade.MaterialBindingAPI.Apply(target).Bind(UsdShade.Material(stage.GetPrimAtPath(mat_dest)))
-                native = sel.material_revision or child.GetAttribute("userProperties:cadgit:material_revision").Get() or record.get("metadata", {}).get("native_materials", {}).get(matname)
+                inherited_library=child.GetAttribute('userProperties:cadgit:library_material_revision').Get()
+                logical=sel.library_material_revision or (inherited_library if not sel.material_revision else None)
+                if logical:
+                    material=chosen_library or library._require(logical,{'material'})
+                    target.CreateAttribute('userProperties:cadgit:library_material_revision',Sdf.ValueTypeNames.String).Set(logical)
+                    if target.IsA(UsdGeom.Mesh):
+                        inherited_binding=next((b for b in record.get('library_bindings',[]) if b['prim_path']==str(child.GetPath())),{})
+                        policy='library' if chosen_library else inherited_binding.get('appearance_source','library')
+                        target.CreateAttribute('userProperties:cadgit:library_appearance_source',Sdf.ValueTypeNames.String).Set(policy)
+                        library_bindings.append({'prim_path':str(target_path),'library_material_revision':logical,'appearance_source':policy})
+                    if chosen_library:
+                        bind_library_preview(stage,target,material,library,f'/World/Looks/Library_{n+1}')
+                        if material['definition'].get('appearance',{}).get('maps'):warnings.append('Texture references are pinned; texture rendering requires compatible UVs. Only base_color, roughness, metallic and opacity maps in supported raw/sRGB/auto color spaces are projected to USD.')
+                elif sel.material_revision and target.HasAttribute('userProperties:cadgit:library_material_revision'):
+                    target.RemoveProperty('userProperties:cadgit:library_material_revision')
+                native = sel.material_revision or record.get('metadata',{}).get('native_materials_by_prim',{}).get(str(child.GetPath())) or child.GetAttribute("userProperties:cadgit:material_revision").Get() or record.get("metadata", {}).get("native_materials", {}).get(matname)
+                if chosen_library and chosen_library['definition'].get('appearance'):
+                    native=None
+                    if target.HasAttribute('userProperties:cadgit:material_revision'):target.RemoveProperty('userProperties:cadgit:material_revision')
                 if native:
                     material=next((m for m in project.records('materials') if m['id']==native),None)
                     if material is None:raise CadgitError(f'Missing native material: {native}')
@@ -145,8 +194,9 @@ def assemble(project, selections, label="Untitled assembly"):
         if not UsdUtils.CreateNewUsdzPackage(Sdf.AssetPath(str(staging / "scene.usda")), str(staging / "scene.usdz")):
             raise CadgitError("Assembly dependency packaging failed")
         r = Assembly(id=aid, created_at=now(), label=label, selections=selections).model_dump()
-        r.update(entry_layer="scene.usdz", bindings=bindings, warnings=sorted(set(warnings)))
-        atomic_json(staging / "recipe.json", {"schema_version": 1, "selections": [s.model_dump() for s in selections], "bindings": bindings})
+        r.update(entry_layer="scene.usdz", bindings=bindings,library_bindings=library_bindings, warnings=sorted(set(warnings)))
+        if library_bindings:r["required_features"]=[FEATURE]
+        atomic_json(staging / "recipe.json", {"schema_version": 1, "selections": [s.model_dump() for s in selections], "bindings": bindings,"library_bindings":library_bindings})
         return project.commit(staging, project.root / "assemblies" / aid, r)
 
 

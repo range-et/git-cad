@@ -64,3 +64,20 @@ def test_non_directory_source_cannot_be_selected_for_in_place_initialization(tmp
     assert report['initialization']['mode']=='new_child_recommended'
     assert 'source (not a directory)' in report['initialization']['reserved_conflicts']
     assert (tmp_path/'source').read_text()=='user data'
+
+
+def test_library_assets_are_inventoried_but_committed_archives_are_not(tmp_path):
+    (tmp_path/'library').mkdir()
+    (tmp_path/'library/datasheet.pdf').write_bytes(b'user specification')
+    (tmp_path/'library/shader.blend').write_bytes(b'user shader')
+    initial=inspector.inspect_folder(tmp_path)
+    assert initial['initialization']['reserved_conflicts']==['library']
+    assert initial['candidates']['documents']['count']==1
+    assert initial['candidates']['blender']['count']==1
+    project=Project.init(initial['initialization']['suggested_project_root'])
+    from cadgit.library import Library
+    Library(project).import_asset(tmp_path/'library/datasheet.pdf',kind='document',label='Specification')
+    final=inspector.inspect_folder(tmp_path)
+    assert final['candidates']['documents']['count']==1
+    assert final['candidates']['blender']['count']==1
+    assert 'shader libraries' in final['note']

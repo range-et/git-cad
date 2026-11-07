@@ -1,0 +1,36 @@
+{
+  "date": "2026-11-07",
+  "role": "independent materials/assets UX recheck",
+  "source_edits": false,
+  "live_native_apps_modified": false,
+  "original_P1_rechecks": {
+    "filtered_and_empty_selection": "passed",
+    "exact_noop_material_definition_preservation": "passed",
+    "partial_async_import_failure_summary": "passed"
+  },
+  "additional_flows": {
+    "geometry_workspace_tab_and_draft_preserved": "passed",
+    "exact_logical_material_revision_pinned_only_to_new_pieces": "passed",
+    "white_swatch_contrast": "passed",
+    "native_graph_only_label": "passed"
+  },
+  "performance_60_small_images": {
+    "initial_seconds": 0.0463,
+    "search_setter_seconds": 0.0001,
+    "filter_work_seconds": 0.0052,
+    "debounce_ms": 180,
+    "previous_initial_seconds": 0.82,
+    "previous_search_seconds": 0.672
+  },
+  "remaining_P1": "None found in exercised workflows",
+  "remaining_P2": [
+    "Reject duplicate map/graph-image role entries and empty graph: names instead of overwriting rows",
+    "When replacing graph_images dict references retain their other metadata",
+    "Use graph preview wording compatible with non-Blender archived shader formats"
+  ],
+  "probes": [
+    "/tmp/git_cad_material_ux_recheck.py",
+    "/tmp/git_cad_material_ux_recheck_flow.py"
+  ],
+  "output": "/tmp/git-cad-material-ux-recheck-output.txt"
+}

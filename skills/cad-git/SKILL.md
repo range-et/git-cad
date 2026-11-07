@@ -1,6 +1,6 @@
 ---
 name: cad-git
-description: Set up and operate CAD-GIT local USD history projects, including onboarding existing Rhino, Blender, and USD folders while preserving their files and recording verifiable baselines and assemblies.
+description: Set up and operate CAD-GIT local USD history projects, including onboarding geometry, materials, images, shaders and specifications into immutable project history while preserving existing files and pinned asset lineage.
 ---
 
 # CAD-GIT
@@ -14,7 +14,10 @@ implemented tool contract, not unimplemented features in a design specification.
 
 - **Onboard an existing folder:** read [references/onboarding.md](references/onboarding.md).
   Inventory the files, choose a safe project root, initialize, record real
-  baselines, verify them, and explain how to keep working.
+  geometry baselines and asset/material revisions, verify them, and explain how to keep working.
+- **Port or maintain materials/images/specs:** read [references/material-library.md](references/material-library.md).
+  Classify files by role, archive independently, create sourced material definitions,
+  pin dependencies and verify renderer support separately from byte integrity.
 - **Operate an initialized project:** read [references/tool-contract.md](references/tool-contract.md)
   for commands, data meanings, adapter behavior, and supported limitations.
 
@@ -43,6 +46,20 @@ differs from these examples.
 - Record only the history actually captured. Existing files become imported
   baselines; do not fabricate earlier saves, dates, app provenance, or lineage.
 
+## Materials and assets are first-class history
+
+The UI has separate **Geometry** and **Materials & Assets** workspaces. A logical
+material combines physical properties, portable appearance, native graphs, maps
+and supporting documents. Each image, graph and document is an independently
+versioned asset. Stable asset IDs identify continuing items; exact revision IDs
+pin dependencies. Never replace a pinned image with a newer head implicitly.
+
+A `.blend` can be a scene or a shader library: classify its intended role before
+capturing/importing it. Missing physics values remain unspecified, not inferred
+from “PLA” or a texture. Same-asset revisions require the expected current revision;
+stale edits fail. Derive creates a new identity linked to selected inputs, and
+recombine explicitly selects physical/appearance donors rather than averaging data.
+
 ## Preserve the user's project
 
 Leave existing native files, textures and linked assets in place by default.
@@ -61,7 +78,9 @@ reader rather than an improvised in-place migration.
 ## Verify the result and report it
 
 Return the project root, executable used, original native-file locations, chosen
-app bindings/capture branches, verified baseline IDs, and any assembly/output IDs.
+app bindings/capture branches, verified baseline IDs, and any assembly/output IDs. Include material/asset identities and revision IDs,
+physical-data sources/unknowns, pinned image/document/graph dependencies, and which
+native representations were actually validated.
 Differentiate working commands and verified captures from unavailable adapters or
 steps awaiting an application. Describe how to start the UI, reconnect save hooks,
 and stop this project's watcher. Avoid claiming full native round-trip editability,

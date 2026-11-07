@@ -1,0 +1,31 @@
+{
+  "review_date": "2026-11-07",
+  "scope": "read-only post-fix verification of project material/asset backend and native continuation",
+  "initial_findings": "All seven initial findings have targeted fixes and regression coverage in current code.",
+  "followup_findings_fixed": [
+    "Textured legacy graph descriptor path was overwritten by image validation's loop variable.",
+    "Rhino graphless captures were incorrectly marked captured_native and suppressed library graphs.",
+    "Manifest native-binding corrections were not mirrored into the archived USD tags, so re-ingesting an exported snapshot reverted edited appearance.",
+    "Blender renamed appended native images after a portable USD image import, defeating name-only archived image remapping.",
+    "Blender mutates the images request list in place; assigning a copy preserves original source names for identity mapping.",
+    "Publishing a staged blend into a different final folder broke its relative texture paths; absolute-path saving before atomic publication corrected final-file references."
+  ],
+  "verification": [
+    "31 tests passed across tests/test_library.py and tests/test_native_adapter_recovery.py.",
+    "CLI image revision without new provenance flags preserved provider, source URL and license while updating this revision's input path.",
+    "Blender-style edited graph capture -> Rhino-style return retained captured shader ID and captured_native policy.",
+    "Explicit library material override cleared the captured graph and selected library appearance again.",
+    "Canonical archived USD tag re-ingestion kept the resolved edited shader ID; WRONG_SHADER_RESTORED False.",
+    "Isolated Blender 5.2.3 final native-file reopen passed after original graph and image files were deleted. A portable-map/native-image name collision produced SharedTexture.png.001, correctly mapped to the pinned image revision in project/library; archived file exists true, CHECK_EXIT 0."
+  ],
+  "native_probe": "/tmp/gitcad_material_texture_restore_recheck.py",
+  "remaining_proven_p1": [],
+  "nonblocking_followups": [
+    "Same-identity named material branches remain deferred; first version has linear CAS revisions and deriving a new identity.",
+    "A generic asset export is not a dependency-bundle export; distinguish material definition JSON from a complete portable library package.",
+    "Opaque unsupported native formats, per-face native shader restoration and general renderer interchange remain outside certified support.",
+    "Deferred defensive polish includes malformed library storage structure/type diagnostics and cache/staging cleanup policies."
+  ],
+  "compatibility_reminder": "Selections/drafts containing library_material_revision should serialize the material-library required feature as well as final assemblies, preventing older clients from silently ignoring assignments. Parent was notified.",
+  "safety": "No source edits by reviewer. All probes used temporary projects and separate factory-startup Blender background processes; live native documents were untouched."
+}

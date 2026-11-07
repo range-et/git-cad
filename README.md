@@ -27,6 +27,9 @@ uv run cad-git --project demo-project ui
 ```
 
 On this Mac, double-click **Open CAD-GIT.command** to open the existing demo.
+The app uses a bundled CAD-GIT cube/history icon for its window and macOS Dock.
+Its editable SVG and PNG/ICNS assets live in `src/cadgit/resources/`;
+run `uv run python scripts/build_icon.py` to regenerate the raster assets.
 The initial engine studies are generated sample geometry, identified in their
 snapshot metadata. Later captures in this local demo include native application
 integration checks.
@@ -77,6 +80,33 @@ my existing design folder, preserving its native files.” The skill folder can 
 be copied into an agent's supported skill-discovery location; it is not installed
 globally by this repository.
 
+Porting now includes the separate [materials and assets portbook](skills/cad-git/references/material-library.md): classify scene versus shader files, register images/specifications, record sourced physical data, pin dependencies, and verify native appearance separately from file integrity.
+
+## Materials & Assets
+
+Switch to **Materials & Assets** at the top of the window. Browse project-wide
+materials, images, shader libraries and documents; select an item and its exact
+revision to inspect properties, dependencies, lineage and source/license details.
+Import assets, create/revise a material, or recombine physical and appearance
+facets from two historical materials. **Use for new pieces** returns to Geometry
+with that revision selected for subsequently added assembly pieces.
+
+Images and documents have their own stable identities and immutable revisions.
+Updating an image does not change materials that reference its older revision.
+Physical values require units and sources; unknown values remain unspecified.
+**Browse Poliigon** opens the provider site; V1 imports local downloads rather
+than providing an authenticated catalog integration.
+
+```sh
+uv run cad-git -p /path/to/project library list
+uv run cad-git -p /path/to/project library import /path/to/color.png --kind image
+uv run cad-git -p /path/to/project library show REVISION_ID
+uv run cad-git -p /path/to/project library verify REVISION_ID
+```
+
+See the [implemented scope and limits](docs/MATERIAL_LIBRARY_V1.md) and
+[material review results](docs/MATERIAL_LIBRARY_REVIEW.md).
+
 ## Storage and lineage
 
 ```text
@@ -91,6 +121,7 @@ project/
   assemblies/<id>/             # pinned recipe, material bindings, scene.usdz
   main/                        # selected assembly pointer and convenience USD
   materials/<revision>/        # native Blender graph library and archived images
+  library/revisions/<revision>/ # logical materials, images, shaders and documents
   artifacts/prints/<id>/       # STL, validation report and source provenance
   .cadgit/                     # disposable runtime state, inbox, logs, draft tray
 ```
@@ -137,6 +168,7 @@ uv run pytest -q
 uv run python tests/integration/cli_smoke.py
 uv run python tests/integration/ui_smoke.py
 uv run python tests/integration/ui_robustness.py
+uv run python tests/integration/material_library_smoke.py
 ```
 
 The second check opens a temporary Qt/VTK project and exercises four viewport modes,

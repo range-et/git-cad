@@ -5,7 +5,8 @@ FORMAT_MAJOR=1
 FORMAT_MINOR=0
 # Future releases register semantics they can safely execute here. Optional
 # extensions do not need a feature gate; behavior-changing requirements do.
-SUPPORTED_FEATURES=frozenset()
+MATERIAL_LIBRARY_FEATURE='cadgit.material-library.v1'
+SUPPORTED_FEATURES=frozenset({MATERIAL_LIBRARY_FEATURE})
 
 
 def check_compatibility(data,context='record',legacy=False):

@@ -82,7 +82,7 @@ def test_blender_shared_material_uses_mesh_identity_and_restores_nested_images(t
     (folder/'COMMITTED').write_text(mid)
     assembly=assemble(p,[{'snapshot_id':snapshot['id'],'prim_path':'/World/Part','material_revision':mid},{'snapshot_id':snapshot['id'],'prim_path':'/World/Part','material_revision':mid,'translation':[3,0,0]}])
     source_bytes=p.stage_path(assembly).read_bytes()
-    image=types.SimpleNamespace(name='Texture',filepath='/missing/original.png')
+    image=types.SimpleNamespace(name='Texture.001',filepath='/missing/original.png')
     class Tree:
         def __init__(self,nodes):self.nodes=nodes
     subtree=Tree([types.SimpleNamespace(image=image)])
@@ -100,9 +100,10 @@ def test_blender_shared_material_uses_mesh_identity_and_restores_nested_images(t
                 objects.append(Object('Part' if not objects else 'Part.001',props))
     @contextmanager
     def library_load(path,link=False):
-        loads.append(path);src=types.SimpleNamespace(materials=['Shared shader']);dst=types.SimpleNamespace(materials=[])
+        loads.append(path);src=types.SimpleNamespace(materials=['Shared shader'],images=['Texture']);dst=types.SimpleNamespace(materials=[],images=[])
         yield src,dst
-        dst.materials=[material for name in dst.materials]
+        dst.materials[:]=[material for name in dst.materials]
+        dst.images[:]=[image for name in dst.images]
     bpy=types.SimpleNamespace(data=types.SimpleNamespace(objects=objects,libraries=types.SimpleNamespace(load=library_load)),ops=types.SimpleNamespace(wm=types.SimpleNamespace(usd_import=usd_import)))
     monkeypatch.setitem(sys.modules,'bpy',bpy)
     exec(blender_import_code(p,assembly['id']),{})

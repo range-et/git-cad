@@ -9,6 +9,7 @@
 | `history/events/` | Commit, branch, main-selection, handoff and other events. |
 | `assemblies/<id>/` | Saved USD assembly, exact input selections and pinned material bindings. |
 | `main/current.json` | Authoritative selected assembly ID. `main/scene.usda` is its recoverable convenience projection. |
+| `library/revisions/<revision>/` | Immutable logical materials, images, graphs and specs; `library/library.json` binds ownership to this project. |
 | `materials/<revision>/` | Archived native shader assets and known image dependencies. |
 | `artifacts/prints/<id>/` | Registered STL, provenance and topology report. |
 | `.cadgit/` | Ignored runtime, inbox, diagnostics and draft state. Failed/pending captures may be needed for recovery. |
@@ -115,6 +116,15 @@ slots/revisions and future engineering properties are separate from geometry
 lineage. Static placement samples time zero; unsupported complex content needs
 explicit review rather than a promise of complete animation/native editability.
 
+## Materials & Assets
+
+Use [material-library.md](material-library.md) for the independent library API and
+porting procedure. `library verify` validates asset/material revision IDs; the
+older top-level `verify` resolves geometry snapshots/assemblies. Logical material
+assignments use `library_material_revision`, separate from a captured native
+`material_revision`. Native captures retain edited appearance per prim; they do
+not silently overwrite it from an older library graph.
+
 ## Optional MCP
 
 With the `mcp` extra installed, run:
@@ -129,5 +139,9 @@ skill. Do not edit global client configuration just to run the CLI workflow.
 The current MCP operations are `project_status`, `history`, `inspect_snapshot`,
 `ingest_usd`, `create_assembly`, `select_main`, `export_print`, `list_materials`, and
 `verify`. Initialization, adapter startup, branch operations and native handoff
-remain available through the CLI. AI client's MCP access and native-app listeners
+remain available through the CLI. Library operations additionally expose
+`library_list`, `library_revision`, `library_history`, `library_import`,
+`library_material`, `library_recombine`, `library_verify` and `library_used_by`.
+Use these for first-class logical materials/assets rather than treating
+`list_materials` (legacy captured shaders) as the full project library. AI client's MCP access and native-app listeners
 are separate connections.
