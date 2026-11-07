@@ -1,0 +1,316 @@
+{
+  "Light_Mode": {
+    "General_UI_Colors": {
+      "Background": {
+        "name": "Light Background",
+        "hex": "#F2F4F7",
+        "rgb": [242, 244, 247]
+      },
+      "Layer_01": {
+        "name": "Light Layer 01",
+        "hex": "#ffffff",
+        "rgb": [255, 255, 255]
+      },
+      "Layer_02": {
+        "name": "Light Layer 02",
+        "hex": "#EDF1F5",
+        "rgb": [237, 241, 245]
+      },
+      "Layer_03": {
+        "name": "Light Layer 03",
+        "hex": "#E3E8EE",
+        "rgb": [227, 232, 238]
+      },
+      "Primary_Text": {
+        "name": "Light Primary Text",
+        "hex": "#141A22",
+        "rgb": [20, 26, 34]
+      },
+      "Secondary_Text": {
+        "name": "Light Secondary Text",
+        "hex": "#4F5A69",
+        "rgb": [79, 90, 105]
+      },
+      "Disabled_Text": {
+        "name": "Light Disabled Text",
+        "hex": "#7E8998",
+        "rgb": [126, 137, 152]
+      },
+      "Border": {
+        "name": "Light Border",
+        "hex": "#BCC6D2",
+        "rgb": [188, 198, 210]
+      },
+      "Border_Subtle": {
+        "name": "Light Border Subtle",
+        "hex": "#D8DFE7",
+        "rgb": [216, 223, 231]
+      },
+      "Overlay": {
+        "name": "Light Overlay",
+        "hex": "rgba(10,14,20,0.24)",
+        "rgb": [10, 14, 20]
+      }
+    }
+  },
+  "Default_Colors": {
+    "General_UI_Colors": {
+      "Background": {
+        "name": "Primary Background",
+        "hex": "#0F1113",
+        "rgb": [
+          15,
+          17,
+          19
+        ]
+      },
+      "Layer_01": {
+        "name": "Dark Layer 01",
+        "hex": "#171A1E",
+        "rgb": [
+          23,
+          26,
+          30
+        ]
+      },
+      "Layer_02": {
+        "name": "Dark Layer 02",
+        "hex": "#1F242B",
+        "rgb": [
+          31,
+          36,
+          43
+        ]
+      },
+      "Layer_03": {
+        "name": "Dark Layer 03",
+        "hex": "#2A313A",
+        "rgb": [
+          42,
+          49,
+          58
+        ]
+      },
+      "Primary_Text": {
+        "name": "Primary Text",
+        "hex": "#EEF2F6",
+        "rgb": [
+          238,
+          242,
+          246
+        ]
+      },
+      "Secondary_Text": {
+        "name": "Secondary Text",
+        "hex": "#B6BFCC",
+        "rgb": [
+          182,
+          191,
+          204
+        ]
+      },
+      "Disabled_Text": {
+        "name": "Dark Disabled Text",
+        "hex": "#7D8794",
+        "rgb": [
+          125,
+          135,
+          148
+        ]
+      },
+      "Border": {
+        "name": "Dark Border",
+        "hex": "#3A434F",
+        "rgb": [
+          58,
+          67,
+          79
+        ]
+      },
+      "Border_Subtle": {
+        "name": "Dark Border Subtle",
+        "hex": "#2B323A",
+        "rgb": [
+          43,
+          50,
+          58
+        ]
+      },
+      "Overlay": {
+        "name": "Dark Overlay",
+        "hex": "rgba(0,0,0,0.65)",
+        "rgb": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "Information_Indicators": {
+      "Information_1": {
+        "name": "Information 1",
+        "hex": "#2B9ED1",
+        "rgb": [
+          43,
+          158,
+          209
+        ]
+      },
+      "Information_2": {
+        "name": "Information 2",
+        "hex": "#1E88C8",
+        "rgb": [
+          30,
+          136,
+          200
+        ]
+      },
+      "Information_3": {
+        "name": "Information 3",
+        "hex": "#6EAD45",
+        "rgb": [
+          110,
+          173,
+          69
+        ]
+      }
+    },
+    "Warnings_and_Alerts": {
+      "Warning_1": {
+        "name": "Warning 1",
+        "hex": "#D7A12A",
+        "rgb": [
+          215,
+          161,
+          42
+        ]
+      },
+      "Alert_1": {
+        "name": "Alert 1 (NASA Red)",
+        "hex": "#E4002B",
+        "rgb": [
+          228,
+          0,
+          43
+        ],
+        "note": "NASA Red, PMS 179. Saturated and uncompromising — reserved for stop-now states. Sourced from the 1976 NASA Graphics Standards Manual; pairs with near-white (--strata-on-error) for high-impact white-on-red warning chrome. Use sparingly; if everything is red, nothing is."
+      }
+    },
+    "Highlights_and_Disabled": {
+      "Highlight": {
+        "name": "Highlight",
+        "hex": "#FFEB3B",
+        "rgb": [
+          255,
+          235,
+          59
+        ]
+      },
+      "Disabled": {
+        "name": "Disabled",
+        "hex": "#757575",
+        "rgb": [
+          117,
+          117,
+          117
+        ]
+      }
+    },
+    "Movement_Colors": {
+      "Start": {
+        "name": "Start Holds",
+        "hex": "#4CAF50",
+        "rgb": [
+          76,
+          175,
+          80
+        ]
+      },
+      "Hand": {
+        "name": "Hand Holds",
+        "hex": "#03A9F4",
+        "rgb": [
+          3,
+          169,
+          244
+        ]
+      },
+      "Foot": {
+        "name": "Foot Holds",
+        "hex": "#FFEB3B",
+        "rgb": [
+          255,
+          235,
+          59
+        ]
+      },
+      "Finish": {
+        "name": "Finish Holds",
+        "hex": "#9C27B0",
+        "rgb": [
+          156,
+          39,
+          176
+        ]
+      }
+    }
+  },
+  "Textures": {
+    "dot": {
+      "name": "Dot",
+      "id": "dot",
+      "radius": 1.5,
+      "spacing": 12,
+      "opacity": 0.6
+    },
+    "hatch_v": {
+      "name": "Vertical Hatch",
+      "id": "hatch-v",
+      "stroke_width": 1,
+      "spacing": 8,
+      "opacity": 0.6
+    },
+    "hatch_h": {
+      "name": "Horizontal Hatch",
+      "id": "hatch-h",
+      "stroke_width": 1,
+      "spacing": 8,
+      "opacity": 0.6
+    },
+    "hatch_x": {
+      "name": "Cross Hatch",
+      "id": "hatch-x",
+      "stroke_width": 1,
+      "spacing": 8,
+      "opacity": 0.6
+    },
+    "hatch_fwd": {
+      "name": "Forward Diagonal",
+      "id": "hatch-fwd",
+      "stroke_width": 1,
+      "spacing": 10,
+      "opacity": 0.6
+    },
+    "hatch_bwd": {
+      "name": "Backward Diagonal",
+      "id": "hatch-bwd",
+      "stroke_width": 1,
+      "spacing": 10,
+      "opacity": 0.6
+    }
+  },
+  "Motion": {
+    "durations": {
+      "fast":   { "ms": 80,  "comment": "Micro-interactions: toggle, hover, color" },
+      "base":   { "ms": 160, "comment": "State changes: menu, tooltip" },
+      "slow":   { "ms": 280, "comment": "Layout changes: accordion, drawer" },
+      "slower": { "ms": 440, "comment": "Entrance animations: page transitions" }
+    },
+    "easings": {
+      "linear":      { "css": "linear",                          "comment": "Constant rate" },
+      "ease_out":    { "css": "cubic-bezier(0.16, 1, 0.3, 1)",  "comment": "Decelerate — entrances" },
+      "ease_in":     { "css": "cubic-bezier(0.7, 0, 0.84, 0)",  "comment": "Accelerate — exits" },
+      "ease_in_out": { "css": "cubic-bezier(0.65, 0, 0.35, 1)", "comment": "Symmetric — toggles" }
+    }
+  }
+}

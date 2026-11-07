@@ -1,0 +1,175 @@
+{
+  "blender_version": "5.2.3 LTS",
+  "test": "Noise Texture -> Color Ramp -> Principled BSDF, USD vs native material library",
+  "results": {
+    "native_material_library": {
+      "signature_equal": true,
+      "signature": {
+        "nodes": [
+          [
+            "Color Ramp",
+            "ShaderNodeValToRGB"
+          ],
+          [
+            "Material Output",
+            "ShaderNodeOutputMaterial"
+          ],
+          [
+            "Noise Texture",
+            "ShaderNodeTexNoise"
+          ],
+          [
+            "Principled BSDF",
+            "ShaderNodeBsdfPrincipled"
+          ]
+        ],
+        "links": [
+          [
+            "Color Ramp",
+            "Color",
+            "Principled BSDF",
+            "Base Color"
+          ],
+          [
+            "Noise Texture",
+            "Fac",
+            "Color Ramp",
+            "Fac"
+          ],
+          [
+            "Principled BSDF",
+            "BSDF",
+            "Material Output",
+            "Surface"
+          ]
+        ],
+        "roughness": 0.3700000047683716,
+        "noise_scale": 6.199999809265137,
+        "ramp_positions": [
+          0.23000000417232513,
+          0.7900000214576721
+        ]
+      }
+    },
+    "usd_export": {
+      "operator_result": [
+        "FINISHED"
+      ],
+      "shaders": [
+        {
+          "path": "/root/_materials/HistoricalProceduralMaterial/Principled_BSDF",
+          "id": "UsdPreviewSurface"
+        },
+        {
+          "path": "/root/_materials/HistoricalProceduralMaterial/bnode__Principled_BSDF",
+          "id": "ND_open_pbr_surface_surfaceshader"
+        },
+        {
+          "path": "/root/_materials/HistoricalProceduralMaterial/NodeGraphs/node",
+          "id": "ND_normal_vector3"
+        },
+        {
+          "path": "/root/_materials/HistoricalProceduralMaterial/NodeGraphs/node_001",
+          "id": "ND_normalize_vector3"
+        },
+        {
+          "path": "/root/_materials/HistoricalProceduralMaterial/NodeGraphs/node_002",
+          "id": "ND_tangent_vector3"
+        },
+        {
+          "path": "/root/_materials/HistoricalProceduralMaterial/NodeGraphs/node_003",
+          "id": "ND_normalize_vector3"
+        },
+        {
+          "path": "/root/_materials/HistoricalProceduralMaterial/NodeGraphs/node_004",
+          "id": "ND_rotate3d_vector3"
+        },
+        {
+          "path": "/root/_materials/HistoricalProceduralMaterial/NodeGraphs/node_005",
+          "id": "ND_normalize_vector3"
+        }
+      ],
+      "files": [
+        "scene.usda",
+        "material.blend",
+        "check_material.py",
+        "textures/color_0C0C0C.exr"
+      ]
+    },
+    "usd_import": {
+      "operator_result": [
+        "FINISHED"
+      ],
+      "signature_equal": false,
+      "signature": {
+        "nodes": [
+          [
+            "Material Output",
+            "ShaderNodeOutputMaterial"
+          ],
+          [
+            "Principled BSDF",
+            "ShaderNodeBsdfPrincipled"
+          ]
+        ],
+        "links": [
+          [
+            "Principled BSDF",
+            "BSDF",
+            "Material Output",
+            "Surface"
+          ]
+        ],
+        "roughness": 0.3700000047683716,
+        "noise_scale": null,
+        "ramp_positions": []
+      }
+    }
+  },
+  "original": {
+    "nodes": [
+      [
+        "Color Ramp",
+        "ShaderNodeValToRGB"
+      ],
+      [
+        "Material Output",
+        "ShaderNodeOutputMaterial"
+      ],
+      [
+        "Noise Texture",
+        "ShaderNodeTexNoise"
+      ],
+      [
+        "Principled BSDF",
+        "ShaderNodeBsdfPrincipled"
+      ]
+    ],
+    "links": [
+      [
+        "Color Ramp",
+        "Color",
+        "Principled BSDF",
+        "Base Color"
+      ],
+      [
+        "Noise Texture",
+        "Fac",
+        "Color Ramp",
+        "Fac"
+      ],
+      [
+        "Principled BSDF",
+        "BSDF",
+        "Material Output",
+        "Surface"
+      ]
+    ],
+    "roughness": 0.3700000047683716,
+    "noise_scale": 6.199999809265137,
+    "ramp_positions": [
+      0.23000000417232513,
+      0.7900000214576721
+    ]
+  }
+}

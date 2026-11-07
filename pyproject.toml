@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cad-git"
+version = "0.1.0"
+description = "Local USD snapshot history, materials, and assembly manager"
+requires-python = ">=3.12,<3.14"
+license = {file = "LICENSE"}
+dependencies = [
+  "rhino3dm>=8,<9", "usd-core>=25,<28", "numpy>=1.26", "pydantic>=2,<3", "typer>=0.15,<1",
+  "PySide6>=6.7,<7", "pyvista>=0.45,<0.50", "pyvistaqt>=0.11,<0.14",
+]
+[project.optional-dependencies]
+mcp = ["mcp>=1,<2"]
+dev = ["pytest>=8", "pillow>=10"]
+
+[project.scripts]
+cad-git = "cadgit.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cadgit"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

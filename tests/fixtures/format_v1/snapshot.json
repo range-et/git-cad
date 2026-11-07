@@ -1,0 +1,1 @@
+{"schema_version":1,"id":"snap_legacy_fixture","source":"rhino","branch":"main","parent":null,"created_at":"2026-11-07T12:00:00.000000Z","label":"Original V1 snapshot","trigger":"ingest","entry_layer":"scene.usda","files":[],"metadata":{},"warnings":[]}

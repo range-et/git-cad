@@ -1,0 +1,40 @@
+{
+  "review_date": "2026-11-07",
+  "role": "adversarial architecture reviewer",
+  "scope": "history integrity, transaction recovery, lineage, adapters, compatibility and native handoff",
+  "initial_probes": "/tmp/cadgit_arch_audit.py",
+  "findings_sent_to_parent": [
+    {"priority":"P1","finding":"Project.init overwrites pre-existing main/scene.usda; initialization publishes config before scaffold completion.","status":"Parent-owned fix"},
+    {"priority":"P1","finding":"Unvalidated captured_at becomes a directory path; bad/nested/date is reported committed but invisible to the history glob.","status":"Parent-owned fix"},
+    {"priority":"P1","finding":"Parent and head selection uses captured_at sorting, so clock rollback creates wrong ancestry.","status":"Parent-owned fix"},
+    {"priority":"P1","finding":"stage_path permits external entry_layer paths; verify can report ok for an unarchived external entry layer.","status":"Parent-owned fix"},
+    {"priority":"P1","finding":"set_main can publish a new current.json while scene.usda remains the previous result; success event precedes publication.","status":"Parent-owned fix"},
+    {"priority":"P1","finding":"Inbox publication before receipt lacks durable idempotency, allowing crash/retry duplicate commits.","status":"Parent-owned fix"},
+    {"priority":"P2","finding":"A live service with a stale heartbeat is treated as stopped, and stop refuses to signal it during long import/RPC work.","status":"Parent-owned fix"},
+    {"priority":"P1","finding":"Native Blender restoration uses a shared material revision as object identity and fails for two parts sharing a shader.","status":"Fixed by this agent"},
+    {"priority":"P1","finding":"Rhino pending export queue is lost on hook reattachment or interpreter restart, stranding exact captured saves.","status":"Fixed by this agent"},
+    {"priority":"P1","finding":"Cross-project adapter ownership is inconsistent: Blender retains old capture hooks; stopping old Rhino project removes the current hook; timed snapshots can steal ownership back.","status":"Fixed by this agent; parent service must call capture(..., respect_binding=True)"}
+  ],
+  "owned_changes": [
+    "src/cadgit/connectors.py",
+    "src/cadgit/resources/rhino_hook.py",
+    "src/cadgit/resources/blender_hook.py",
+    "tests/test_native_adapter_recovery.py"
+  ],
+  "targeted_verification": {
+    "command":".venv/bin/pytest -q tests/test_native_adapter_recovery.py",
+    "result":"8 passed",
+    "native_probe_command":".venv/bin/python /tmp/cadgit_shared_material_native_probe.py",
+    "native_probe_result":"Blender 5.2.3 background process: two mesh objects share the same restored material; procedural native graph retains 4 nodes.",
+    "native_probe_output":"SHARED_NATIVE_MATERIAL_VERIFIED {\"objects\": 2, \"nodes\": 4, \"same_material\": true}",
+    "live_native_app_state":"Not modified"
+  },
+  "remaining_limitations": [
+    "Rhino queue recovery requires an attached Rhino runtime to reopen the captured native staging documents. Failed captures are retained for explicit intervention rather than automatically retried forever.",
+    "Disposable annotated USD import projections are retained under .cadgit/staging; an interrupted handoff can leave cache/staging data for eventual cleanup.",
+    "Per-face/subset native material restoration remains unsupported and fails rather than inferring assignment.",
+    "Source identity is currently application-plus-branch, not an independently identified document stream. Different native files saved into one application branch share that history; document provenance is metadata.",
+    "Source histories and compatibility failures still require defensive indexing/quarantine if an unrelated committed manifest is malformed. One bad record can make broad history enumeration fail.",
+    "No general native geometry reconstruction, native full-document archive, or third-party plugin registry was added; these remain documented scope boundaries."
+  ]
+}

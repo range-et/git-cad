@@ -1,0 +1,12 @@
+# CAD-GIT development/runtime
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.cadgit/
+.DS_Store
+build/
+dist/
+
+demo-project/

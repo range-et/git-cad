@@ -1,1064 +1,1115 @@
-# CAD-GIT v0.1 Specification
+# CAD-GIT first release specification
 
-Status: proposed implementation contract. Date: 2026-11-07.
+Status: final review draft, revision 1, 2026-11-07. Not yet implemented. “v1” means the first
+usable product release, including the UI; package versions may initially be 0.1.x.
+MUST denotes a release requirement, SHOULD a preferred implementation, and MAY an
+optional behavior. Interfaces below are specified, not implemented.
 
-This specification defines the first local Rust release, including its CLI and
-required visual comparison/resolution UI. Requirements marked MUST are
-release requirements; SHOULD identifies a preferred implementation with a
-documented reason required for deviation; MAY identifies optional behavior.
-Examples describe intended interfaces, not software already implemented.
+## 1. Mission and preservation promise
 
-## 1. Mission and product promise
+CAD-GIT is a fully local USD snapshot history and assembly tool implemented in Python.
+Native applications continue working normally with their existing working files.
+Every tracked native save, and every configured tool snapshot, produces a new
+immutable timestamped USD snapshot. The user browses that history in a 3D UI,
+selects objects or subassemblies from any snapshots, and deliberately composes a
+new reusable USD result on `main`.
 
-CAD-GIT is a fully local versioning tool for CAD and 3D work, implemented around a
-Rust core with OpenUSD as its scene description, composition, and interchange
-model. It captures native states, records shape changes and immutable ancestry,
-reconciles supported edits, and serves selected revisions to native applications.
-It starts from the command line and includes a local 3D comparison and conflict
-resolution UI. It MUST operate without an AI agent, account, or remote service.
-Rhino and Blender are the first test adapters, not the boundary of the product.
+Material assets can be selected/versioned independently of geometry. Snapshot
+packages MAY include native material-only assets when needed to preserve an
+authoring graph beyond the portable USD representation. A per-project material
+library separates appearance, engineering properties, and assignments.
 
-OpenUSD is not a programming language for recording modeling actions. CAD-GIT
-uses it to parse and compose observable scene states; its own versioned data model
-records history, changes, conflicts, and synchronization outcomes. Native files
-remain authoritative for app-specific data that USD does not express.
+The promise is: **Every successfully recorded USD snapshot remains addressable,
+and every assembled result records exactly which snapshots and scene pieces it
+came from.** Source snapshots are never overwritten by composition or omission.
 
-The product promise is: **Every successfully captured version remains recoverable,
-and switching versions never silently discards current work.**
+CAD-GIT preserves exported USD scene states and their file lineage. It does not
+promise historical restoration of complete native documents, feature trees,
+procedural modifiers, rigs, sculpt strokes, or anything the exporter omitted.
+Geometry export can tessellate native CAD surfaces. The UI MUST distinguish that
+limitation from a successful, complete native backup.
 
-The bridge MUST distinguish a native application save from successful bridge
-capture. It cannot preserve intermediate edits that were never saved or captured,
-saves made while capture was unavailable, or data lost through disk failure.
-Capture failures MUST be visible and MUST NOT be reported as successful history.
-No automatic pruning or history rewriting is permitted in v0.1.
+Git, accounts, remote services, AI agents, and network connectivity are not runtime
+requirements. An optional MCP interface exposes the same local operations. Local
+history is not an off-device backup.
 
-Git compatibility is secondary. Git, a hosting account, an AI agent, and a network
-connection MUST NOT be required for normal operation. Local history is not an
-off-device backup. The repository license continues to govern the project;
-agent-agnostic interfaces do not imply a different software license.
+## 2. Scope and explicit exclusions
 
-## 2. Users and principal interactions
+The first release MUST include:
 
-The initial user works in an existing project folder with Rhino and Blender on one
-workstation. They run `cad-git begin`, save normally or enable CAD-GIT snapshots,
-inspect changes visually, resolve conflicts, name checkpoints, and revisit earlier
-states. `rhino-blender-bridge` and `rbb` MAY remain compatibility aliases; new
-documentation and public APIs MUST use the application-independent CAD-GIT name.
+- A local service and command-line entry point.
+- A PySide6 history/assembly UI with an embedded PyVista/VTK inspection viewport.
+- Save-triggered timestamped USD snapshot history from Rhino and Blender.
+- Optional timed USD snapshots of current application state.
+- Source timelines with labels, timestamps, parent links, and export status.
+- Visual browsing, object/subtree selection, comparison, and result preview.
+- Deliberate assembly of selections from arbitrary historical snapshots.
+- Reusable USD output with an exact source-selection recipe and dependency lock.
+- Direct STL export of selected historical USD geometry without reopening native
+  apps; outputs are registered artifacts with units, mesh reports, and provenance.
+- Versioned material library, independent geometry/look selection, and a tested
+  Blender-native graph restore path for a declared supported material subset.
+- Named sub-branches within source timelines and explicit cross-app import lineage.
+- Extensible local application plugins and optional MCP access.
+- Crash-safe publication, visible failures, integrity verification, and recovery.
 
-The reference workflow is an engine assembly: Rhino models mechanical parts,
-Blender animates their operation and sculpts an organic housing, and both apps
-can publish revised shapes. A native CAD body and a derived sculpt mesh can
-coexist. Documentation, render setups, and animation remain recoverable in native
-files even when they cannot be exchanged through USD.
+The first release does NOT require:
 
-Automatic behavior MUST be predictable: capture saves, publish valid exchange
-data, and apply compatible nonconflicting updates. Conflicting or unsupported
-updates remain pending. Historical inspection MUST NOT secretly advance the
-current editing branch.
+- Per-vertex edit tracking, sculpt-operation reconstruction, feature-history diff,
+  geometric merge, automatic cross-application reconciliation, or topology repair.
+- Global identity matching across every historical object rename or re-export.
+- A permanent version archive of complete native `.3dm` or `.blend` scene saves.
+  Native material-only assets are an explicit supported exception.
+- Automatic native-document refresh, native import, save-path changes, or replacing
+  an app's object database with a live USD stage.
+- Remote collaboration, distributed version control, a hosted database, or cloud.
+- A complex branch/merge system for `main` beyond an explicitly selected current
+  assembly and retained output provenance.
 
-## 3. v0.1 scope
+## 3. Native working files remain native
 
-### 3.1 Required
+Each bound document has one CAD-GIT-managed working native path, for example
+`source/model.3dm` and `source/scene.blend`. CAD-GIT MUST NOT rename that path to
+include version numbers, redirect normal saves into history folders, or maintain
+one permanent native copy per USD snapshot. The application retains its normal
+save, undo, autosave, backup, and recovery behavior; existing `.blend1` or Rhino
+backup settings MUST NOT be disabled to enforce a literal one-file count.
 
-- One local project service and one explicitly bound document per connected app.
-- Complete native save captures, immutable manifests, revision ancestry, and
-  dependency inventories.
-- Native save notifications with an exact-save capture mechanism.
-- Configurable tool-initiated snapshots of current in-memory native state.
-- Versioned recovery Save Copy/Save As snapshots of all participating documents
-  before a synchronization transaction can modify any native application.
-- Bidirectional static mesh exchange, including Blender sculpt meshes into Rhino.
-- Rhino BRep preservation in `.3dm` plus a tessellated USD representation.
-- Stable logical part and instance identity across rename, move, and refresh.
-- Part-level change inspection; conservative three-way conflict detection.
-- Explicit saved-state deltas and an immutable record of each resolved synced state.
-- A local 3D comparison UI with changed-part/property highlighting and explicit
-  keep-local, keep-incoming, keep-both, and deletion decisions.
-- Named project checkpoints, branches, and selected-revision serving.
-- Crash recovery, integrity verification, machine-readable status, and diagnostics.
-- A CLI, MCP interface, and an agent-agnostic skill using one domain API.
-- A documented, versioned out-of-process plugin protocol and adapter SDK examples.
+Immutable native material-only libraries may live under `materials/` so a Blender
+graph can survive even when USD conversion is approximate. This does not create a
+new full scene copy per save or change the user's working native path.
 
-### 3.2 Deferred
+Connectors observe completed native saves and export the corresponding scene
+state. Tool-initiated snapshots export USD from current memory without overwriting
+or pretending to save the native document. Such a snapshot MUST be labelled
+`tool_snapshot`, with `native_state_saved: false` when it includes unsaved edits.
 
-Remote collaboration, hosted repositories, a full GUI project manager, feature-level CAD
-merging, automatic surface/vertex merging, mesh-to-BRep reconstruction, general
-rigging interchange, bidirectional procedural shader interchange, parametric
-constraint interchange, distributed locking, custom USD asset resolvers, storage
-delta compression, and automatic storage reclamation are outside v0.1.
+Save As is allowed: the connector records the new active working path after user
+confirmation of the binding. Choosing a new unrelated document requires an
+explicit new source binding. CAD-GIT MUST NOT open, close, or import into native
+applications merely because a new snapshot or main assembly exists.
 
-The basic visual comparison/resolution UI is required in v0.1; a general CAD
-editor, elaborate graphical branch explorer, and cloud collaboration are not.
-Full native history MUST be preserved even for deferred exchange features.
-Blender edits MUST NOT be treated as view-only merely because they originate in
-Blender. Capability limits apply to representations and properties, not app roles.
+## 4. Source timelines and main
 
-### 3.3 Initial compatibility
+`rhino` and `blender` are initially convenient source timeline names. Each source
+is bound to a document identity and has an independent ordered history of USD
+snapshots. Additional sources or multiple documents from one app have distinct
+source IDs/names. These are local logical lanes, not Git branches.
 
-The first reference platform is macOS, Rhino 8, and Blender 5.2 LTS. Exact tested
-application builds, bridge adapter versions, USD library versions, and community
-integration versions MUST be recorded in a release compatibility matrix. Current
-smoke-test observations are Rhino 8.36.26296.17002 and Blender 5.2.3 LTS; they are
-observations, not an existing support certification. Other platforms are not
-supported until their save, filesystem, and recovery tests pass.
+Each source MAY have multiple named authoring branches, with one explicitly active
+branch per bound workspace. A branch records snapshot parents and imported inputs;
+it is not a requirement to duplicate the native working document. Branch creation
+and continuation from a historical USD are explicit. Capturing a subsequent save
+records the active source branch and its known cross-app inputs. Unknown manual
+import lineage is annotated by the user, not inferred from object similarity.
 
-## 4. Domain model
+A successful native save/export appends only to the originating source timeline.
+It MUST NOT advance `main` or modify another app. Each snapshot references its
+previous snapshot and the triggering event. Initial native base files are chosen
+by the user; they are exported as source baselines rather than silently combined.
 
-| Entity | Meaning |
-| --- | --- |
-| Project | Portable project ID, configuration, history, branches, and dependencies. |
-| Document | Persistent logical document identity, independent of file path and process. |
-| Part | Logical designed component, identified independently of its name. |
-| Instance | Placement of a part in an assembly; distinct identity from the part. |
-| Representation | A part's native BRep, mesh, sculpt mesh, render mesh, or other realization. |
-| Capture | Immutable native save snapshot and its provenance; a history node. |
-| Publication | Immutable validated USD exchange package derived from a capture. |
-| Checkpoint | Immutable project manifest pinning exact captures, publications, configuration, and dependencies. |
-| Branch | Named durable reference to a line of checkpoints. |
-| Workspace | The current app binding, editing base, branch, local changes, and applied content. |
-| Served state | Exact content acknowledged as applied by an app; may be a preview or a mixed working state. |
-| Conflict | Recorded incompatible changes relative to a known shared base. |
-| Artifact | Derived deliverable with inputs, settings, hashes, units, and tool versions. |
-| Change set | Typed, base-relative observable changes between captured scene states. |
-| Sync transaction | Recovery snapshots, change sets, decisions, result composition, and per-app receipts for one reconciliation attempt. |
-| Synced state | An immutable resolved composition plus its inputs and application outcomes; never a synonym for an unacknowledged export. |
+`main` is the user's currently accepted USD assembly, not a continually synced
+union of the newest source states. It may intentionally lag every source head.
+The user can select any historical combination, including an older Rhino snapshot
+and a newer Blender snapshot. Selectors such as `rhino~10` resolve once to immutable
+snapshot IDs; they never remain floating references inside a saved recipe.
 
-Captures, publications, checkpoints, conflict records, and resolution records MUST
-have separate typed IDs. Parent and input links MUST be explicit. Modification
-times and filename numbering MUST NOT determine ancestry. Human-readable labels
-are optional aliases; short IDs MUST resolve unambiguously or fail.
+Main does not need a separate Git-like commit/merge history in v1. Each saved
+assembly is already a versioned USD output with its recipe. Updating the main
+pointer does not delete previous assemblies or imply that either native app has
+loaded it. Restoring a previous main means selecting a retained assembly again.
 
-A checkpoint MUST distinguish recorded native state from unsaved, applied working
-state. A native Blender save taken before a Rhino update MUST NOT be described as
-containing that update. Until Blender is saved again, the checkpoint can pin the
-native capture plus the applied exchange inputs needed to describe its mixed
-state. Exact native restoration uses the native capture; exchange reconstruction
-is a separately identified operation with a capability report.
-
-### 4.1 Shape change history
-
-Every comparison MUST record its base and target IDs, normalizer version, units,
-comparison tolerance, and per-entity/property changes. Required categories are
-add, delete, geometry replacement, geometry deformation where correspondence is
-known, topology change, transform change, hierarchy change, name change, and
-supported appearance/property change. Geometry change records MUST retain before
-and after representation references; summaries MUST not substitute for payloads.
-
-When topology correspondence exists, a change set SHOULD include changed vertex
-indices, displacement bounds, and triangle connectivity changes. When it does not,
-the result MUST be described as a topology/representation replacement, not an
-invented vertex correspondence. Optional approximate surface-distance overlays
-MUST be labelled approximate. A bounds change alone is insufficient evidence for
-the shape of the edit; unchanged bounds do not establish unchanged geometry.
-
-The bridge records how observable saved states differ. Exported snapshots cannot
-reconstruct an unobserved sequence of sculpt strokes, feature operations, or user
-intent. Plugins MAY supply native operation history as additional provenance,
-clearly distinguishing reported operations from inferred state differences.
-
-Each successful reconciliation MUST create an immutable synced-state checkpoint
-pinning the selected representation/property revisions, decisions, and app
-acknowledgements. A computed candidate can exist before application, but MUST be
-labelled candidate or partially applied until the declared target set acknowledges
-it. Native post-apply recovery snapshots SHOULD then record the resulting native
-state; failure leaves a degraded receipt rather than erasing the pre-apply backups.
-
-## 5. Architecture
-
-```text
-Native save hooks                  CLI / MCP / local 3D UI
-   Rhino adapter                         |
-   Blender adapter                       v
-          |                      Shared domain API
-          +------------------------------|
-                                         v
-                              Local Rust project service
-                              - capture/publication queue
-                              - history and ancestry
-                              - conflict plans
-                              - served-state acknowledgements
-                                         |
-                                         v
-                              Immutable history on disk
-                              Native files + USD + manifests
-```
-
-The project service is stateful. The MCP server is a thin control interface.
-There MUST be one service writer per project. Core versioning MUST NOT live in
-prompt instructions, an LLM conversation, or third-party MCP-specific code.
-
-Application adapters MUST use native application APIs and main-thread dispatch
-for document operations. Community MCP integrations SHOULD be reused for suitable
-discovery, inspection, and execution capabilities, behind versioned adapter
-interfaces. A community MCP server alone MUST NOT be assumed to provide exact
-save capture, stable identity, or transactional application.
-
-The service MUST persist enough intent and outcomes to resume without an agent.
-Long operations MUST return operation IDs and expose progress. Rendering or
-exporting MUST NOT run inside the MCP request thread indefinitely.
-
-### 5.1 Rust implementation boundary
-
-The history engine, transaction coordinator, semantic diff model, plugin host,
-CLI, service, MCP facade, and comparison UI MUST be implemented in Rust. Thin
-native-app hooks MAY use the application's supported Python or .NET runtime;
-requiring Rust inside Rhino or Blender would increase connector complexity.
-
-The preferred USD backend for v0.1 is the reference OpenUSD SDK, isolated in a
-local worker behind a versioned request/response boundary. OpenUSD is principally
-a C++ SDK; Rust interfaces and alternative parsers require capability evaluation.
-The worker MAY use a small C++ shim or validated Rust bindings. This native
-dependency does not change the Rust ownership of history and synchronization.
-CAD-GIT MUST NOT implement an ad hoc USDA parser and claim full OpenUSD support.
-Binary USDC, composition, instancing, payloads, relative assets, and invalid input
-handling MUST pass the reference fixture suite before a backend is accepted.
-
-Worker crashes MUST not take down the history writer or native applications.
-The Rust process MUST validate worker outputs before using them. Scene extraction
-SHOULD return indexed triangle meshes, transforms, identities, typed properties,
-dependency inventories, and capability warnings through a bounded interchange
-format. Render buffers are derived caches, not authoritative history. A release
-MUST document how the USD SDK is bundled and pin its ABI/build compatibility.
-
-Suggested workspace boundaries are `cadgit-core`, `cadgit-store`, `cadgit-diff`,
-`cadgit-sync`, `cadgit-plugin`, `cadgit-usd`, `cadgit-cli`, `cadgit-ui`, and
-`cadgit-mcp`. These are responsibility boundaries, not a requirement to create
-nine crates before the first end-to-end prototype. Errors MUST be typed; unsafe
-FFI MUST remain confined to the USD boundary. No remote database or message broker
-is required. SQLite MAY index history; immutable files remain authoritative.
-
-### 5.2 Extensible plugins and minimal connectors
-
-A plugin is a local executable/bridge adapter with a versioned manifest, protocol
-version, application/version range, capabilities, and entry point. It communicates
-out of process, avoiding a dependency on Rust's unstable native library ABI.
-Plugin authors MAY use any language supported by their target application.
-Installation is explicit; unknown project files MUST NOT execute plugins.
-
-Required protocol operations are `handshake`, `enumerate_documents`,
-`get_document_state`, `snapshot_native`, and `export_usd`, with optional
-`subscribe_saves`, `apply_plan`, `restore_native`, and `inspect_managed_state`.
-Operations MUST return typed document identity, operation IDs, errors, and
-capability limitations. Save subscriptions MUST supply deduplicable event IDs.
-`snapshot_native` MUST state whether document path, dirty flag, selection, and undo
-state are preserved. The SDK MUST provide a conformance harness and one minimal
-example rather than requiring contributors to understand the entire core.
-
-Native hooks perform save notifications, snapshot/export/import, metadata
-persistence, and main-thread dispatch. History, diffing, merge decisions, UI, and
-retention MUST stay in the core. Existing community MCP integrations MAY transport
-these operations but are not required to run CAD-GIT.
-
-Any application that exports supported USD can contribute an exchange snapshot.
-An export-only adapter is an ingest plugin, not a full bidirectional connector.
-Exact native recovery requires a native snapshot capability; applying back into
-an application requires an apply/import capability. Without stable identity,
-ingested scenes are opaque replacements or require user-assisted mapping; they
-MUST NOT silently receive full automatic part-level synchronization support.
-The Rhino and Blender reference adapters MUST meet the complete v0.1 contract.
-
-### 5.3 Local visual comparison and resolution
-
-`cad-git ui` opens a native local window; `cad-git diff A B --visual` opens a
-comparison, and `cad-git resolve ID --visual` opens a three-way resolution. The
-daemon MUST operate without a window. When auto-application encounters a conflict,
-it leaves the transaction pending and exposes the local viewer action. In an
-interactive session it MAY open that viewer automatically when configured; a
-headless session MUST remain pending without inventing a decision.
-
-The preferred UI stack is `egui`/`eframe` with `wgpu` for a small mesh viewer. This
-is a proposed engineering choice subject to a macOS rendering, picking, and
-large-mesh prototype, not a claim that these libraries provide USD conflict
-resolution themselves. Bevy or Rerun MAY be evaluated, but a game engine, a full
-Hydra integration, and photorealistic rendering are not required for v0.1.
-
-The viewer MUST provide:
-
-- Base, local, incoming, and proposed-result views with linked cameras.
-- Overlay and side-by-side comparison, orbit/pan/zoom, fit selection, object
-  picking, isolation, visibility toggles, and a scale/unit indicator.
-- A changed-part list and property panel showing exact before/after values and
-  source application/revision. Deletion MUST remain visible as a ghost of the
-  removed object; added/changed/deleted/conflicting states use labelled styles
-  as well as colors so color is not the only indicator.
-- Geometry deformation highlighting where correspondence is known, full-part
-  highlighting for topology replacement, and explicit unknown/unsupported labels.
-- Keep-local, take-incoming, keep-both, and explicit deletion controls at the
-  supported part/property-group granularity. It MUST show dependency effects and
-  block combinations the core declares incompatible.
-- A result preview, remaining-conflict count, and explicit confirmation to apply.
-  Closing the window or cancelling MUST preserve all versions and apply nothing.
-
-Changing a resolution in the UI only edits a candidate plan. On confirmation, the
-core MUST revalidate expected bases and document fingerprints before application.
-If the user edited an app while reviewing, the stale plan MUST be invalidated or
-recomputed. Keep-both assigns distinct alternative/instance identities without
-erasing ancestry. Choosing deletion removes content from the served result,
-never from retained history. The viewer MUST not execute native modeling code.
-
-If GPU initialization or scene rendering fails, the CLI and history service MUST
-remain usable. A textual diff/exported diagnostic MUST remain available; the
-visual conflict stays unresolved unless the user explicitly resolves it through
-the CLI. Static triangle meshes, basic appearance, wireframes, transforms, and
-bounding boxes are the required render subset. Unsupported USD features MUST be
-listed rather than silently presented as a complete visual reproduction.
-
-## 6. Project layout and authoritative state
+## 5. Project layout
 
 ```text
 project/
 ├── cadgit.json
-├── source/                         # Suggested working native-file location
-│   ├── model.3dm
-│   └── scene.blend
-├── assets/                         # Working dependencies
-├── usd/
-│   └── scene.usda                  # Regenerated current exchange entry point
+├── source/                              # Suggested, not mandatory locations
+│   ├── model.3dm                        # Normal current Rhino document
+│   └── scene.blend                      # Normal current Blender document
 ├── history/
-│   ├── project.json                # Project identity and format versions
-│   ├── captures/<capture-id>/
-│   │   ├── manifest.json
-│   │   ├── native/<saved-file>
-│   │   └── dependencies/...
-│   ├── publications/<publication-id>/
-│   │   ├── manifest.json
-│   │   ├── scene.usda
-│   │   ├── parts/...
-│   │   └── assets/...
-│   ├── checkpoints/<checkpoint-id>/manifest.json
-│   ├── conflicts/<conflict-id>/manifest.json
-│   ├── resolutions/<resolution-id>/manifest.json
+│   ├── sources/<source-id>/
+│   │   └── <UTC-timestamp>_<snapshot-id>/
+│   │       ├── manifest.json
+│   │       ├── scene.usda                # Snapshot entry point
+│   │       ├── geometry.usdc             # Where appropriate for exporter
+│   │       └── assets/...
 │   └── events/<sequence>-<event-id>.json
+├── assemblies/<assembly-id>/
+│   ├── recipe.json
+│   ├── manifest.json
+│   ├── scene.usda                        # Immutable reusable assembly
+│   └── assets/...                       # Any newly generated dependencies
+├── main/
+│   ├── current.json                     # Selected immutable assembly ID
+│   └── scene.usda                       # Regenerable convenience entry point
 ├── artifacts/<kind>/<artifact-id>/
 │   ├── manifest.json
 │   └── outputs/...
+├── materials/<material-id>/revisions/<revision-id>/
+│   ├── manifest.json
+│   ├── appearance/                      # USD/MaterialX/native graph/textures
+│   └── engineering/                     # Typed physical data/provider payloads
+├── mcp.example.json                     # Optional local launch example
 └── .cadgit/
+    ├── index.sqlite                     # Rebuildable search/status index
     ├── connections.local.json
-    ├── index.sqlite                # Rebuildable query index
-    ├── staging/
+    ├── staging/                         # Incomplete exact-state exports
+    ├── drafts/                          # Recoverable assembly working drafts
     ├── locks/
     └── logs/
 ```
 
-Working files MAY remain in their existing project locations. `begin` MUST NOT
-move them without an explicit command. Portable manifest paths MUST be relative
-to their documented root; persisted paths MUST NOT escape that root. External
-dependencies have an original locator plus a captured project-local copy or an
-explicit unresolved status.
+Working native files MAY remain elsewhere. Initialization MUST NOT move existing
+files. UTC timestamps are display/ordering aids, not unique identities: snapshot
+IDs MUST avoid collisions even when clocks move backwards or saves happen in the
+same timestamp unit. Each save event gets its own snapshot record, including
+unchanged saves. Byte-identical immutable payloads MAY be reused internally without
+collapsing those records or changing apparent history.
 
-`history/` and recorded `artifacts/` are durable. They MUST NOT be placed solely
-inside `.cadgit/`. Events form the authoritative ordered record of branch updates,
-document bindings, publication outcomes, and successful application receipts.
-Mutable query caches and connection locations are rebuildable. Events MUST NOT
-contain credentials. A signed or tamper-proof audit trail is not a v0.1 claim.
+`history/`, `materials/`, `assemblies/`, and registered `artifacts/` are durable project content.
+Committed event records are authoritative for source ordering and main selections;
+the index and current-entry files can be rebuilt. Drafts and incomplete staging
+MUST not be deleted merely because they are uncommitted. Runtime locations and
+credentials MUST NOT become portable source references. Relative dependencies
+must be resolved relative to the file that authors them.
 
-The filesystem layout is intentionally simple and may duplicate large files.
-Deduplication MAY reuse byte-identical immutable payloads, but MUST NOT use
-writable hard links to native working files. Future optimization MUST preserve
-logical captures and their recorded ancestry.
+## 6. Save-to-USD capture contract
 
-## 7. Identity and representations
+### 6.1 Trigger and exact-state boundary
 
-The bridge MUST persist project, document, part, instance, and representation IDs.
-Rhino object GUIDs and Blender object custom properties are adapter mappings to
-these identities, not interchangeable global identities. Multiple native objects
-can realize one representation; assembly instances reference a shared part.
+Every completed tracked native Save/Save As creates a snapshot attempt. File
+watching is a fallback, not proof that every save was observed; native completion
+hooks are the preferred trigger. Export must correspond to that exact saved state,
+not a later state that happens to exist when a background queue runs.
 
-Bridge-managed USD paths SHOULD use immutable identifiers, for example:
+A connector MUST either export/serialize an exact USD scene state within a safe
+native event boundary, preserve an immutable native-memory representation for
+later export, or use private transient source staging. A temporary native Save Copy
+is acceptable only when necessary for exact export/retry; it is not permanent
+native history and MUST NOT replace the active working path. It may be removed
+only after the USD snapshot commits or explicit abandonment is recorded. A failed
+export's only exact retry input MUST NOT be deleted automatically.
 
-```text
-/World/Parts/p_<part-id>/Representations/r_<representation-id>
-/World/Assembly/Instances/i_<instance-id>
-```
+Subsequent edits MUST NOT race extraction. App API work is dispatched safely on
+its required thread, with export settings pinned. Capture latency must be measured
+and visible; zero-overhead Save is not promised. A plugin that cannot secure the
+exact save state MUST advertise `best_effort`, and the UI MUST identify the gap.
 
-Names and layer/collection organization are editable metadata. Identity MUST
-survive renaming and moving. Duplicate objects MUST receive new instance or part
-identities according to whether they are instances or independent copies. If an
-adapter cannot establish that distinction, it MUST report ambiguity and avoid
-automatic reconciliation. Copy/paste across projects and copied project folders
-require identity validation; creating an independent project requires an explicit
-fork operation.
+Exports MUST NOT be coalesced in a way that skips saved versions. Distinct source
+events remain ordered even if export completion order differs. Intermediate save
+versions missed while the plugin was disconnected cannot be reconstructed by
+reading only the latest native file; record the monitoring gap honestly.
 
-Representations record `derived_from`, conversion settings, and source revision.
-A Blender sculpt derived from a Rhino tessellation MUST NOT replace or erase the
-native BRep. A newer BRep may make the sculpt out of date; it does not establish
-that the sculpt is unwanted. Promotion of an alternate representation as the
-served shape is an explicit recorded resolution.
-
-## 8. Save capture contract
-
-### 8.0 Snapshot before synchronization
-
-The first data operation of every apply-capable synchronization transaction MUST
-be a versioned native recovery snapshot of every participating bound document:
-both Rhino and Blender in the reference workflow. This MUST capture current
-in-memory state, including unsaved edits, through Save Copy/Save As semantics.
-Copying the last native file on disk is insufficient when the app is dirty.
-The snapshot MUST be written to a unique versioned location, verified, and
-committed to history before diff/reconciliation proceeds or any target is changed.
-The active working file path SHOULD remain stable; if only Save As is available,
-the adapter MUST restore the working binding without dropping dirty state or
-changing the user's editing lineage. If it cannot do so safely, it is unsupported.
-
-The triggering save can satisfy the source snapshot only when its document token
-proves no subsequent in-memory edits occurred. Otherwise a new recovery snapshot
-is required. Recovery snapshots are retained but MUST NOT recursively trigger new
-sync transactions. Save events MUST distinguish user save, tool autosnapshot,
-pre-sync recovery, and post-apply snapshot origins.
-
-Snapshots across apps are not simultaneous. Their document tokens and capture
-times MUST be recorded and rechecked before apply. If either app changes during
-capture/review, replan from protected inputs; no stale result can be applied.
-If either participating app cannot snapshot, stop the transaction before mutation
-and show the reason. Independent source capture/publication MAY continue while a
-target is closed; it MUST not be called a successful two-app sync. All previously
-captured files remain intact when the pair snapshot is incomplete.
-
-### 8.1 Sources and defaults
-
-Normal native Save and Save As are capture triggers while monitoring is active.
-The adapter MUST distinguish these from bridge-generated exports, temporary save
-copies, autosaves, and recovery writes. Autosaves are excluded by default and can
-be enabled as a separately labelled capture class. Save As preserves logical
-document identity unless the user explicitly forks the document.
-
-CAD-GIT's own timed snapshots are separate from native autosave files. They MUST
-use a non-destructive snapshot API and MUST NOT overwrite the working native file.
-The default configuration enables a 300-second interval; users can disable or
-change it. Unchanged documents MAY reuse payload bytes while retaining the
-snapshot event. Busy native operations MAY postpone capture to a safe main-thread
-boundary, with overdue status visible. A tool autosnapshot is an authoring capture
-and can trigger synchronization; a pre-sync recovery copy is not another trigger.
-
-Native events are authoritative; directory watching is a diagnostic/recovery
-fallback. A watcher MUST NOT claim that it captured every save merely because it
-observed a final file modification. The service MUST report monitoring gaps.
-
-### 8.2 Exact-save capture
-
-On completed native save, the adapter MUST secure the exact saved bytes into an
-immutable staging copy before a subsequent managed save can overwrite those
-bytes. This may require a short synchronous copy or a verified native snapshot
-mechanism. Async export alone does not satisfy native capture.
-
-Native-document mutations and saves MUST be serialized appropriately in the app.
-If exact capture cannot be guaranteed by an integration, its capability is
-`best_effort`, automatic exact-save mode MUST be disabled, and status MUST explain
-the limitation. External programs simultaneously rewriting the same native file
-are unsupported and MUST cause verification failure when detected.
-
-Each capture records event ID, app/document IDs, native file hash and size, UTC
-time, source branch/base, last applied exchange inputs, versions, and dependency
-inventory. Native capture completion is independent from publication completion.
-Two unchanged saves MAY reference identical bytes but MUST retain distinct save
-events. Debouncing exports MUST NOT erase save captures.
-
-### 8.3 Dependency completeness
-
-The bridge MUST inventory file references supported by its adapters, including
-textures and linked native assets. It MUST preserve required external files for
-self-contained recovery or mark the capture incomplete. Missing or opaque
-dependencies MUST be reported; the tool MUST NOT promise complete recovery while
-ignoring them. Captured dependency bytes describe capture-time contents, not an
-unprovable earlier state of an independently modified external asset.
-
-Executable dependencies, add-ons, fonts, and application versions MUST be
-recorded where detectable; they are not automatically redistributed. Exact
-re-rendering across different application versions is not guaranteed.
-
-### 8.4 Capture failure
-
-A native save can succeed while capture fails. The user MUST see that distinction
-through app feedback where available, CLI status, and an error event. Disk-full,
-permission, hash, or copy failures MUST leave the previous history intact. The
-service MUST NOT silently drop earlier saves to relieve backpressure. It SHOULD
-allow native editing to continue while clearly reporting that capture is degraded.
-
-## 9. Publication and OpenUSD contract
-
-Each captured version MUST have a publication attempt or an explicit unsupported
-or deferred status. By default, all supported captures are exported; rapid saves
-MAY be processed later, but each export MUST read its exact capture rather than
-whatever happens to be current in the app. If a runtime cannot export an older
-capture safely, it MUST use an isolated native document/process or preserve an
-exact exchange snapshot at capture time. Reopening an old capture over the
-user's working document is prohibited.
-
-Publication stages are:
+### 6.2 Snapshot publication
 
 ```text
-CAPTURED → EXPORT_QUEUED → EXPORTING → VALIDATING → PUBLISHED
-                                   ↘ FAILED / UNSUPPORTED
+SAVE OBSERVED → EXACT STATE SECURED → EXPORTING → VALIDATING → COMMITTED
+                    ↘ CAPTURE FAILED        ↘ EXPORT FAILED / INCOMPLETE
 ```
 
-A publication MUST include a root stage, all required layers/assets, a source
-capture ID, per-part identity mappings, exporter settings and versions, file
-hashes, coordinate metadata, and a capability/loss report. Failed attempts remain
-recorded; retries produce new outcome records/publications without mutating the
-original capture.
+A snapshot is a history entry only when its USD and required manifest commit
+successfully. Failed attempts remain visible as events with export/capture errors
+and retry availability. A native save may succeed while USD export fails; these
+outcomes MUST never be conflated.
 
-### 9.1 Coordinates
+Each manifest MUST record:
 
-Canonical bridge publications MUST use Z-up, right-handed coordinates and
-`metersPerUnit = 1.0`. Rhino millimeter geometry MUST be converted explicitly.
-Exporter-native Y-up data MUST be transformed or wrapped with a tested basis
-conversion; changing `upAxis` metadata alone is invalid. Conversion MUST happen
-exactly once. Reflections, normals, winding, negative scales, transforms, and
-instance placements require validation.
+- Schema version, snapshot/event/source IDs, parent snapshot, and timestamps.
+- Trigger kind: user save, Save As, tool snapshot, manual export, or baseline.
+- Source app/document identity and observed working path.
+- Whether exported state was saved natively; exact/best-effort capture status.
+- App, plugin, USD backend versions, export settings, and scope/filter selection.
+- Entry layer and complete file inventory with sizes and SHA-256 hashes.
+- Dependencies, unsupported/omitted content, units, axis, and validation results.
+- Optional `derived_from_assembly`/`derived_from_snapshot` provenance when known.
+- Source branch, imported-input roles, material revision IDs, and native/portable
+  material fidelity status when those assets were captured.
 
-Historical native units and tolerances MUST be retained. Existing smoke-test USD
-files use native Y-up millimeter output and are not yet canonical publications.
+Snapshots MUST be immutable after commitment. A retry yields a new outcome record
+and a new snapshot when successful, linked to the original event; it MUST NOT
+rewrite a previously committed snapshot. When the exact old state is unavailable,
+a retry cannot silently export today's native state as yesterday's version.
 
-### 9.2 Composition
+### 6.3 Assets and export fidelity
 
-Publications SHOULD separate reusable part definitions, assembly placements,
-geometry, and portable appearance opinions. The native `.blend` retains full
-animation, lighting, cameras, modifiers, and shaders; `.3dm` retains native CAD
-and documentation. Only declared supported properties participate in exchange.
+Capture textures and other resolvable file dependencies into immutable history or
+an immutable shared store. Missing/unsupported dependencies produce an incomplete
+status. An incomplete snapshot MAY be viewed with warnings but cannot be silently
+presented as a complete reusable assembly input.
 
-The root SHOULD provide a `/World` default prim. Binary `.usdc` SHOULD hold heavy
-geometry; `.usda` SHOULD hold readable composition and overrides. v0.1 SHOULD use
-ordinary relative references and pinned revision paths. A custom asset resolver
-and a VariantSet containing every historical revision are not required.
+The connector MUST state what native content the exporter omits or converts. Raw
+native files are not permanently copied into the snapshot archive by default.
+Application settings, add-ons, native procedures, and full editability are not
+recoverable solely because USD export succeeded.
 
-Layers MUST NOT be used to hide a same-property conflict by strength ordering.
-Full exports MUST NOT be placed as competing whole-scene sublayers and described
-as a merge. A reconciled project composition references selected per-part inputs
-and recorded resolutions. Flattened exports MAY be generated as artifacts but
-MUST NOT replace the authoritative layer graph or native history.
+Timed tool snapshots are configurable and disabled until enabled by the user.
+They export current state, label unsaved content accurately, and do not change the
+native file's path, dirty flag, undo history, or native autosave policy. Busy-app
+postponement is visible. Save/export callbacks MUST distinguish their origins to
+avoid recursively creating snapshots from CAD-GIT's own export operations.
 
-### 9.3 Validation
+## 7. Domain model and lineage
 
-Validation MUST check composition opens, dependency resolution, identity
-uniqueness, supported prim types, finite geometry/transforms, declared units and
-axis, and source-to-output bounds within configured tolerance. A calibration
-test MUST verify asymmetric shape placement and orientation as well as size.
-Unsupported objects and omitted properties MUST be listed. A partial publication
-MUST NOT be auto-applied as if omitted objects were deleted.
-
-## 10. Change detection and reconciliation
-
-### 10.1 Shared base
-
-Independent editing creates divergence from a common base; it does not by itself
-establish a conflict. Different parts or compatible property changes can reconcile
-automatically. A conflict means incompatible edits or a dependency violation,
-not merely two independently saved files. Unsaved target edits also count: the
-mandatory pre-sync snapshot preserves them and reveals divergence before any
-overwrite. File timestamps and whether the user pressed Save are not merge rules.
-
-Reconciliation compares base, local, and incoming values for a known part,
-representation, instance, and property group. Base is the exact applied source
-recorded in the target workspace, not the last global save or newest timestamp.
-Targets can contain mixed part revisions; the bridge MUST retain that mapping.
-
-Managed groups are geometry, placement, hierarchy, display metadata, and declared
-portable appearance properties. Adapter-native animation and other unexchanged
-data remain protected local state. Local dirty detection MUST inspect managed
-in-memory state before application, even if the native file has not been saved.
-A broad app dirty flag alone does not identify which part changed; uncertainty
-MUST block automatic application for the affected scope.
-
-Exact file hashes establish byte identity, not geometric equivalence. Semantic
-fingerprints MUST use a versioned normalization algorithm and declared numerical
-tolerances. Unknown or nondeterministic differences are conservatively treated as
-changes; approximate matching MUST NOT silently reassign identity.
-
-### 10.2 Default decisions
-
-| Base-relative changes | Decision |
+| Record | Meaning |
 | --- | --- |
-| Incoming changed; local managed state unchanged | Apply after compatibility checks. |
-| Local changed; incoming unchanged | Keep local, record divergence. |
-| Both changed to an identical supported value | Converge and record acknowledgement. |
-| Both changed different parts | Combine if dependencies remain compatible. |
-| Same part, distinct independent groups | Combine only when an explicit compatibility rule permits. |
-| Same geometry changed on both sides | Record conflict; preserve both. |
-| Delete versus modify | Record conflict. |
-| Identity, ancestry, or completeness uncertain | Leave pending; require diagnosis/resolution. |
+| Source | One named native document/export stream. |
+| Snapshot | Immutable exported USD state plus dependencies and provenance. |
+| Event | Save observed, export outcome, label, main selection, or operation result. |
+| Selection | Snapshot ID plus source prim/subtree or instance and extraction options. |
+| Assembly draft | User's editable collection of selections and placement choices. |
+| Assembly | Immutable USD result and exact source recipe. |
+| Main pointer | Current accepted assembly; not native application state. |
+| Artifact | Render, print file, package, or another derived output with pinned input. |
+| Material revision | Immutable appearance and/or engineering assets with provider capabilities and provenance. |
+| Material assignment | Pinned visual surface binding or engineering body/region assignment; these are separate roles. |
+| Material slot | Software-independent binding identity preserved/remapped by adapters; distinct from display names and native slot indices. |
 
-Geometric and placement edits are not automatically independent: altered part
-origins or pivots can change the interpretation of a transform. Dependency checks
-MUST consider these relationships. v0.1 MUST NOT claim surface-level or
-vertex-level merging.
+The required lineage graph is file/snapshot/selection/assembly/output lineage.
+Cross-version vertex correspondence or universal CAD part identity is not required.
+A selection uses `(snapshot_id, prim_path)` and instance information where needed;
+this is unambiguous even if a later snapshot renames that object. Optional native
+IDs can improve browsing but MUST NOT be required for ordinary snapshot splicing.
 
-Conflicts record base/local/incoming IDs, affected groups, dependency impact, and
-available resolutions. Resolutions include keep local, take incoming, keep both,
-or supply a manually reconciled new representation. A resolution is immutable and
-links all inputs. Any automatic or agent-requested resolution MUST be auditable.
+A recipe records exact source snapshots, source prim paths, destination paths,
+parent/child selections, placement transforms, dependency policy, and any explicit
+property overrides. Snapshot, recipe, assembly, and artifact IDs are separate.
+Parent links are recorded; timestamps do not establish causality.
 
-### 10.3 Deletion and scope
+When a user imports a CAD-GIT result into a native app, known import provenance can
+be attached to later snapshots. Unobserved manual imports need a user-supplied
+lineage annotation. The tool MUST NOT infer proof of lineage from visual similarity
+or a filename alone. Source editing histories can diverge freely without producing
+an automatic merge conflict on every save.
 
-Only explicit tombstones from a complete managed inventory can propagate deletion.
-Selection-only export, hidden objects, filters, exporter failures, and missing
-payloads MUST NOT imply deletion. The bridge MUST never delete unmanaged content.
-Removed parts remain recoverable in history. Deleting a referenced part or
-changing assembly structure requires dependency checks before application.
+### 7.1 Record and versioning contract
 
-## 11. Applying updates and serving revisions
+Format evolution MUST follow the [additive data compatibility contract](DATA_COMPATIBILITY.md).
+UI versions are independent of data versions. New optional fields MUST preserve
+historical defaults, unknown fields MUST survive validation and known-field edits,
+and unsupported required semantics MUST be rejected explicitly. Every future
+release MUST retain V1 readers and pass the frozen V1 compatibility tests.
 
-The end-to-end synchronization sequence is:
+All persistent record types MUST have an explicit schema version and opaque ID.
+Use UUID-based record IDs and SHA-256 content hashes; neither filenames nor native
+material names are identity. Snapshot parents, source-branch parents, imported
+inputs, selected pieces, and derived artifacts are distinct typed relationships.
+An exported source snapshot can link to multiple inputs without pretending they
+are one linear native edit history. No automatic squash, rebase, or pruning is
+part of v1.
 
-```text
-SAVE / TIMED SNAPSHOT / EXPLICIT SYNC
-  → VERSIONED NATIVE SNAPSHOTS OF ALL PARTICIPANTS
-  → VERIFY SNAPSHOTS AND THEIR DOCUMENT TOKENS
-  → PARSE EXACT USD STATES AND COMPUTE BASE-RELATIVE CHANGE SETS
-  → RECONCILE OR RECORD CONFLICT
-  → VISUAL REVIEW WHEN REQUIRED
-  → COMMIT RESOLUTION AND CANDIDATE SYNCED STATE
-  → RECHECK TARGET TOKENS
-  → APPLY SUPPORTED RESULT
-  → RECORD PER-APP ACKNOWLEDGEMENTS AND RESULT SNAPSHOTS
-  → MARK SYNCED / PARTIALLY APPLIED / FAILED
-```
+The service writer serializes immutable event/record publication. Mutable source
+heads and main selection are derived references backed by committed events.
+Pydantic models MUST reject unknown required schema versions and invalid references;
+JSON Schema exports document the file/plugin contracts. Schema upgrades create a
+new explicitly versioned projection/migration record, preserving old payloads.
+Unknown optional provider payloads remain preserved as opaque versioned assets.
 
-Snapshots are the first data operation, before comparisons used to authorize a
-sync. Lightweight connection/status inspection is permitted before snapshots.
-Existing immutable USD publications MAY be reused only when they match the exact
-protected native state. A diff from the last on-disk save MUST NOT conceal unsaved
-in-memory edits. Before preview/native restore, the same protection applies to
-all documents that the operation can mutate.
+The snapshot manifest's `files` inventory is relative to the snapshot root;
+referenced assets outside that root require an explicit project-local asset ID
+and hash. No portable reference may depend solely on an external absolute path.
+Operational timestamps are UTC; the UI localizes them and can show exact UTC.
 
-Application uses a durable plan with target workspace, expected base, incoming
-inputs, affected IDs, compatibility checks, recovery capture, and operation ID.
-Immediately before mutation the target MUST be rechecked; a stale plan MUST fail
-or be recomputed. Applying an update MUST NOT trigger automatic native saving.
-Native saves remain user actions unless explicitly requested by a command.
-
-Blender SHOULD retain stable object containers for transforms and animation while
-replacing compatible mesh data beneath them. It MUST NOT delete/recreate entire
-collections on refresh. Topology-dependent modifiers, vertex groups, UVs,
-material slots, shape keys, and rigging require adapter-specific checks. If their
-preservation cannot be established, the update remains pending or is imported as
-an explicit alternate representation. Retaining an object name is not a
-compatibility guarantee.
-
-Rhino MUST receive supported mesh representations without silently replacing a
-native BRep with a mesh. Native object attributes and downstream references MUST
-be preserved where supported; otherwise the plan MUST report the limitation.
-
-Apply lifecycle:
-
-```text
-AVAILABLE → PLANNED → RECOVERY_CAPTURED → APPLYING → ACKNOWLEDGED
-                 ↘ CONFLICT / BLOCKED          ↘ FAILED / UNKNOWN
-```
-
-An app acknowledgement MUST include applied inputs, resulting managed-state
-fingerprint, and target document identity. The served reference advances only
-after acknowledgement. A disconnected or crashed target remains failed/unknown
-until inspection; the bridge MUST NOT infer success from sending a command.
-
-`serve` applies a historical exchange state to bridge-managed content in a target
-workspace. It does not move branch history or restore the whole native document.
-Default serving creates a detached preview, pauses automatic incoming application
-for that target, and reports the target as pinned. Editing/saving from preview
-requires an explicit fork or return to the prior workspace; capture still
-preserves the save while publication is held pending that decision.
-
-`restore-native` opens an exact native capture after securing current work. It
-does not pretend a mesh import can reconstruct native features or application
-state. If recovery capture cannot be made, switching MUST stop. Applying changes
-in both apps is a coordinated operation with individual receipts, not an atomic
-cross-application transaction; partial success MUST be reported accurately.
-
-## 12. History, branches, and checkpoints
-
-Every capture remains addressable. Named checkpoints pin exact inputs and record
-a message; they do not rewrite or squash automatic captures. A branch advances
-through explicit checkpoint records and resolutions. History queries SHOULD
-default to a readable checkpoint/session view while `--all` exposes every event.
-Filters MUST support app, document, part, representation, branch, and time.
-
-A checkpoint without `--save` records the latest available native captures and
-known applied inputs, explicitly reporting unsaved app state. `checkpoint --save`
-requests native saves from all selected apps and records their successful
-captures. If one fails, it MUST NOT label a partial combination complete; an
-explicit `--allow-incomplete` can record an incomplete checkpoint. No simultaneity
-claim is made about saves taken at different times.
-
-Storage growth MUST be visible through `status`/`storage`. v0.1 MUST NOT delete
-captures automatically. Disk-full stops new history publication safely. Complete
-project backup requires all durable files, including referenced dependencies;
-copying only the current USD root or native working files is insufficient.
-
-## 13. Artifact provenance
-
-Artifacts are optional typed outputs under `artifacts/<kind>/<artifact-id>/`.
-Kinds are extensible strings, such as `prints`, `renders`, `drawings`, or
-`simulations`. No fixed directory per hypothetical output type is required.
-
-Each recorded artifact MUST include its exact checkpoint/publication inputs,
-source hashes, settings, units, relevant coordinate conventions, creator/tool
-versions, output hashes, timestamp, and dependency inventory. A print export
-SHOULD record tessellation and mesh validation settings. A render SHOULD record
-camera, renderer, frame, resolution, and available color-management settings.
-The bridge records provenance; it does not certify manufacturability or guarantee
-identical rendering on another machine. Recorded outputs are immutable; retries
-produce new artifacts. Arbitrary artifact registration is required; automated
-print/render execution can be added by later exporters.
-
-## 14. CLI contract
-
-Canonical executable: `cad-git`. Legacy aliases MAY be `rhino-blender-bridge` and
-`rbb`; no Git executable integration is implied by the name.
-
-| Command | Required behavior |
-| --- | --- |
-| `begin [path]` | Initialize absent metadata, resume/start the service, discover apps, bind unambiguous documents, and enable monitoring. Idempotent. |
-| `stop` | Stop monitoring cleanly after recording queue state; never close apps or discard history. |
-| `status` | Report connection, capture coverage, dirty/pinned state, captured/published/applied IDs, queues, conflicts, and failures. |
-| `bind --app APP --document ID` | Explicitly select a target; never choose arbitrarily among ambiguous documents. |
-| `adopt --app APP --scope all\|selection` | Capture a baseline and enroll explicitly selected content in identity tracking and exchange. |
-| `capture --app APP` | Request a native save/capture through the adapter. |
-| `sync` | Snapshot all participants, compare, reconcile, and apply only a protected compatible result. |
-| `autosave on\|off [--interval SECONDS]` | Configure non-destructive timed native snapshots. |
-| `publish CAPTURE` | Queue/retry exchange publication from that exact capture. |
-| `log [--all] [--part ID]` | Query immutable history and readable summaries. |
-| `show ID` | Inspect a typed record, dependencies, and provenance. |
-| `diff A B [--part ID] [--visual]` | Report semantic changes; optionally open the local 3D comparison. |
-| `ui [--conflict ID]` | Open the local history/comparison/resolution window. |
-| `checkpoint -m TEXT [--save]` | Record a pinned project combination; optionally request native saves first. |
-| `branch NAME --from CHECKPOINT` | Create a durable history reference without mutating app documents. |
-| `switch BRANCH --app APP` | Protect current work and move the target to the selected editing branch. |
-| `serve CHECKPOINT --app APP` | Preview a selected historical exchange state without moving branch history. |
-| `resume --app APP` | Leave preview/pinned mode through a protected transition. |
-| `fork NAME --from ID --app APP` | Create and bind an editable branch from the selected state. |
-| `restore-native CAPTURE --app APP` | Protect current work and reopen the exact native save. |
-| `conflicts` | List unresolved conflicts and their three-way inputs. |
-| `resolve ID --keep local\|incoming\|both` | Record and apply an explicit resolution plan where supported. |
-| `resolve ID --visual` | Review base/local/incoming and confirm choices in the 3D UI. |
-| `plugin list\|inspect\|register` | Inspect capabilities or explicitly register a local plugin manifest. |
-| `artifact register PATH --kind KIND --from CHECKPOINT` | Preserve outputs and provenance. |
-| `verify [ID]` | Check hashes, dependency closure, manifests, and USD validity. |
-| `doctor` | Diagnose integration versions, missing hooks, identities, queues, and partial operations. |
-| `storage` | Report retained bytes and projected pressure without pruning. |
-| `operation ID` | Inspect a long-running operation and individual app receipts. |
-
-`begin` MUST NOT open/close documents, overwrite existing configuration, adopt all
-scene objects, initialize Git, or upgrade adapters silently. Ambiguous binding or
-adoption leaves a clear pending setup action. Initial adoption captures a baseline
-and assigns identity only within the explicitly selected scope. Existing
-unmanaged content remains unmanaged until adopted.
-
-Commands MUST support `--json`, return structured error codes, and keep diagnostic
-text off JSON output. Suggested envelope:
+An illustrative snapshot record is:
 
 ```json
 {
   "schema_version": 1,
-  "ok": true,
-  "operation_id": "op_...",
-  "state": "queued",
-  "result": {},
-  "warnings": [],
-  "error": null
+  "id": "snapshot_...",
+  "source_id": "source_...",
+  "branch_id": "branch_...",
+  "parent_snapshot_id": "snapshot_previous",
+  "created_at": "2026-11-07T18:00:00.000000Z",
+  "trigger": "user_save",
+  "native_state_saved": true,
+  "capture_quality": "exact",
+  "entry_layer": "scene.usda",
+  "imported_inputs": [{"kind": "assembly", "id": "assembly_input"}],
+  "material_revisions": ["material_revision_..."],
+  "files": [{"path": "scene.usda", "sha256": "<64-hex-digits>", "bytes": 1234}],
+  "capabilities": {"geometry": "complete", "native_materials": "partial"},
+  "warnings": ["One material requires an unavailable provider dependency."]
 }
 ```
 
-Exit codes: 0 success/accepted queue operation; 1 operation failure; 2 invalid
-arguments/configuration; 3 conflict or blocked transition; 4 unavailable service
-or adapter; 5 integrity failure. Queued acceptance is not completion. `--wait`
-MUST return the final operation result or a timeout with an operation ID; timeout
-does not cancel the underlying operation.
+The IDs/hashes above are placeholders, not valid production records. Exporter
+versions/settings, all dependencies, unsupported scopes, and validation outcomes
+remain required manifest data as defined in section 6. Partial material status
+does not silently convert into a native-fidelity success.
 
-## 15. Project configuration
+## 8. UI required in the first release
 
-`cadgit.json` is portable, versioned, validated, and captured with history.
-Machine-local ports, process IDs, credentials, and absolute installation paths
-belong outside it. Unknown required schema versions MUST fail clearly. Config
-migrations MUST preserve the old bytes in history and be explicit.
+The UI is a release requirement, not a later enhancement. It MUST run locally
+without an agent and provide:
 
-Illustrative v1 configuration:
+- Source lanes and snapshot cards/timeline with timestamps, labels, status, and
+  source app. Save history and USD animation time must be distinct controls.
+- Opening supported snapshot geometry in the inspection viewport, with scene tree, object picking,
+  orbit/pan/zoom, fit, isolation, visibility, and shading/wireframe controls.
+- Side-by-side or toggle comparison of snapshots, with a shared camera option.
+  A changed-object/property summary is useful; per-vertex tracking is not required.
+- Selecting objects/subtrees from multiple snapshots and adding them to a draft.
+- Browsing historical project materials, choosing a shader independently from
+  geometry, and reporting native fidelity versus portable preview fidelity.
+- A result hierarchy with source badges, source-revision jump links, placement
+  controls, rename/remove/duplicate, and a clear preview of the combined result.
+- Dependency and namespace issue explanations with explicit resolution choices.
+- Save draft, save assembly, set current main, reopen prior assembly, and export.
+- Export selected source/assembly parts as STL with dimensions/unit preview, mesh
+  validation results, and a link to the registered print artifact.
+- A durable operation/status panel showing export queues, failures, gaps, and
+  unsupported features. Closing a review cannot silently accept or delete data.
+
+Initial selection granularity is prim, subtree, subassembly, or supported instance.
+Arbitrary vertex/face fragments are not required. Whole materials/cameras/lights
+can be selected when their dependencies are supported. Per-property overrides MAY
+be added for well-defined placement/visibility/appearance fields; a general shader
+or CAD editor is not part of v1.
+
+### 8.1 PyVista inspection viewport
+
+The first-release viewer uses PyVista/VTK embedded in PySide6 through
+`pyvistaqt.QtInteractor`. It is a geometry inspection/selection viewport, not a
+universal USD renderer or a Cycles shader evaluator. The reference OpenUSD SDK
+opens and composes the stage; an extraction worker creates display meshes and
+metadata for the viewer. PyVista is not responsible for interpreting arbitrary
+USD composition arcs. See [Qt embedding](https://qt.pyvista.org/usage.html),
+[mesh picking](https://docs.pyvista.org/api/plotting/_autosummary/pyvista.plotter.enable_mesh_picking),
+and [basic PBR display](https://docs.pyvista.org/examples/02-plot/pbr).
+
+Required display subset: polygon meshes, source hierarchy, evaluated transforms,
+supported instances, bounds, normals, wireframe/edges, neutral shading, and basic
+supported material colors. Textures/basic PBR MAY be shown after explicit
+qualification. Curves, lights/cameras as display icons, point instancers, volumes,
+subdivision evaluation, full animation playback, and arbitrary shader execution
+are not guaranteed in v1. Their presence MUST be listed; unsupported content may
+be inspected as metadata/bounds where possible and remains preserved in USD.
+
+Every actor pick MUST map back to `(snapshot_id, prim_path, instance_occurrence)`.
+Split display meshes/material groups and any display triangulation MUST retain
+that map. A simplified display mesh is not a new source geometry revision.
+Assembly/export always uses original USD selections, never reconstructed viewport
+triangles. Source hierarchy and selection remain available independently of which
+objects currently have a rendered actor.
+
+The worker MUST evaluate transform stacks, visibility/purpose, unit/axis
+conversion, and instance placement consistently for the supported display subset.
+It MUST validate indices/finite values before sending geometry to VTK. USD time
+samples are distinct from version history; v1 MUST support selecting an inspection
+time code, with an explicit indication if a feature cannot be evaluated. Full
+animation editing/playback is not required. Dependency or topology errors cannot
+be hidden by a plausible-looking fallback mesh.
+
+The Qt application owns one GUI event loop. Widget, actor, and VTK render-window
+mutations occur on the GUI thread. Workers return validated immutable result data
+through queued signals; large USD parsing/mesh extraction must not freeze the UI.
+Viewer crashes/GPU failures must not damage durable history. An external usdview
+launcher MAY be supplied as a diagnostic, not as a required runtime UI or an
+unimplemented substitute for integrated selection/assembly preview.
+
+### 8.2 Monad System visual language
+
+The UI MUST use [Monad System](https://github.com/range-et/monad_system). The
+reviewed revision is `358d0559da407897957a5817b24f9ebd8774b791`. Its `colors.json`
+is the palette source; its generated CSS supplies reference spacing/typography.
+The inspected repo does not include a Qt adapter. CAD-GIT must generate a small
+Qt palette/QSS adapter from pinned tokens rather than treating browser CSS as a
+Qt stylesheet. Preserve the upstream MIT notice with reused assets.
+
+Required theme mapping uses semantic names: background/layer surfaces, primary
+and secondary text, border/focus, interactive, information, success, warning, and
+error. Dark is the initial default; light and system-following modes are supported.
+Theme switching changes chrome/viewport background, not saved material colors.
+Source-lane categorical colors are distinct from error/status colors.
+
+Use the reference 8-unit spacing grid, squared/simple controls, sans-serif UI text,
+and monospace IDs/technical values. Font families follow the reference theme with
+installed-platform fallbacks; a missing preferred font cannot break layout.
+Use clear keyboard focus, labelled icons, and text/pattern indicators in addition
+to color. Subtle hover/focus transitions MAY follow the theme's short motion
+values; reduced-motion disables nonessential animation. No flashing timelines,
+heavy decorative motion, or automatic camera animation on every save.
+
+The token adapter MUST have tests proving selected upstream tokens propagate to
+Qt and PyVista surfaces. Theme data is packaged locally; no theme-server, CDN,
+remote font fetch, or upstream build tool is required for normal operation.
+The app Python version need not match Monad's palette-build environment.
+
+### 8.3 First-release workspace layout and interactions
+
+```text
++---------------------------------------------------------------+
+| Project / source connection status          Snapshot / Export  |
++-------------+-------------------------------+-----------------+
+| Sources and | Snapshot / assembly viewport  | Inspector       |
+| branches    | [source A] [source B] [result] | Provenance      |
+| Scene tree  |                               | Material slots  |
+| Materials   |                               | Dependencies    |
++-------------+-------------------------------+-----------------+
+| Timeline: application lanes, branches, snapshots, lineage links |
++---------------------------------------------------------------+
+| Draft tray: selected pieces / transforms / material bindings    |
+| Save assembly       Set main       Export / Open in application |
++---------------------------------------------------------------+
+```
+
+Panels can resize/collapse; timeline and draft state survive reopening. A source
+snapshot click changes inspection, never main or native content. Adding a picked
+prim or tree selection adds a recipe item; removing it removes only that item.
+Drag/drop is a convenience and MUST have keyboard/context-menu equivalents.
+Selecting a material opens its provider/revision/fidelity/physical-data details.
+A follow-latest working binding is visually distinct from a pinned saved binding.
+
+The UI distinguishes browsing a historical snapshot, editing a draft, and viewing
+an accepted assembly. Save assembly and Set main are distinct explicit actions.
+The lineage inspector shows source-parent and imported-input links separately.
+Errors offer retry/inspect rather than silently replacing the native working state.
+No panel needs to present low-level IPC/backend details outside diagnostics.
+
+## 9. Splicing and assembly semantics
+
+The user can take, for example, an engine block from Rhino snapshot R12, its cover
+from Rhino R8, and a sculpted housing from Blender B5. These become selections
+inside one assembly draft. No shared native feature history is required.
+
+For each selection CAD-GIT MUST:
+
+1. Resolve the exact immutable snapshot and verify that the selected path exists.
+2. Include the selected prim/subtree plus required dependencies and inherited
+   context. Preserve source-world placement unless the user explicitly changes it.
+3. Assign a distinct destination namespace so selections from different snapshots
+   can coexist. Preserve source metadata in the recipe rather than guessing which
+   objects are logically identical.
+4. Resolve material targets, external asset references, transforms, instance
+   prototypes, and other supported relationships needed for the selection.
+5. Preview and validate the composed result before saving or setting main.
+
+USD references are useful for reusable subassemblies, but blindly referencing an
+arbitrary mesh prim is insufficient: required parent transforms or material
+bindings may live outside that subtree. The extraction step MUST capture needed
+context, copy/remap dependencies, or explicitly block unsupported selections.
+Selecting a child and its parent twice MUST be detected so unintended duplicate
+content is visible. Choosing two versions of a similarly named part is allowed;
+the user may deliberately want both.
+
+An assembly recipe MUST store an immutable array of selections and separate
+bindings rather than a serialized UI selection state. For example:
 
 ```json
 {
   "schema_version": 1,
-  "project": {"id": "<uuid>", "name": "engine"},
-  "documents": [
-    {"id": "<uuid>", "app": "rhino", "path": "source/model.3dm"},
-    {"id": "<uuid>", "app": "blender", "path": "source/scene.blend"}
+  "id": "assembly_...",
+  "label": "Engine presentation",
+  "selections": [
+    {
+      "id": "selection_block",
+      "snapshot_id": "rhino_snapshot_12",
+      "prim_path": "/Engine/Block",
+      "destination": "/World/Engine/Block",
+      "placement_policy": "preserve_source_world"
+    },
+    {
+      "id": "selection_cover",
+      "snapshot_id": "blender_snapshot_5",
+      "prim_path": "/Housing",
+      "destination": "/World/Engine/Cover",
+      "placement_policy": "preserve_source_world"
+    }
   ],
-  "paths": {"history": "history", "artifacts": "artifacts", "runtime": ".cadgit"},
-  "capture": {
-    "on_save": true,
-    "autosaves": false,
-    "tool_snapshots": {"enabled": true, "interval_seconds": 300},
-    "before_sync": "all_participants",
-    "require_exact_snapshot": true,
-    "dependencies": "capture_or_mark_incomplete"
-  },
-  "exchange": {
-    "direction": "bidirectional",
-    "trigger": "captured_save",
-    "auto_apply": "compatible_nonconflicting",
-    "publication_policy": "every_supported_capture",
-    "canonical_up_axis": "Z",
-    "meters_per_unit": 1.0,
-    "comparison_tolerance_m": 0.000001
-  },
-  "history": {"retention": "all", "automatic_pruning": false},
-  "ui": {"open_on_conflict": true, "renderer": "wgpu"},
-  "git": {"required": false, "initialize": false}
+  "bindings": [
+    {
+      "target_selection": "selection_block",
+      "slot_id": "slot_surface",
+      "appearance_revision": "historical_blender_graph_4",
+      "engineering_revision": "engineering_card_2"
+    }
+  ],
+  "main_selection_requested": false
 }
 ```
 
-Comparison tolerance is not a meshing or manufacturing tolerance. Meshing presets
-MUST be adapter-specific, separately configured, and recorded per publication.
-The earlier `test/bridge.json` is an obsolete prototype with one-way ownership;
-it MUST NOT be treated as the schema or migrated by guessing missing values.
+Instance selections add occurrence/prototype identity; user placement changes add
+an explicit transform with unit/basis metadata. A validated saved recipe also pins
+the complete dependency lock and any material resolver outcomes. Main selection
+is recorded separately after save; the example flag is intent, not an atomic
+mutation of the main pointer.
 
-## 16. MCP and agent skill
+### 9.1 Issues are assembly choices, not geometric merge conflicts
 
-MCP tools MUST call the same domain operations as the CLI. The default MCP
-transport is stdio; it does not require a public HTTP port. Required tools are
-`project_status`, `begin`, `bind_document`, `adopt_content`, `capture`, `publish`, `history`,
-`show_record`, `diff`, `checkpoint`, `branch`, `switch`, `serve`, `resume`, `fork`,
-`restore_native`, `list_conflicts`, `resolve_conflict`, `register_artifact`,
-`verify`, `doctor`, `sync`, `configure_autosnapshot`, and `get_operation`.
-Stop/storage/plugin inspection MAY also be exposed. UI, CLI, and MCP MUST use
-the same resolution and pre-sync snapshot safeguards.
+Independent native saves are normal history, not errors requiring reconciliation.
+Issues arise when building a result: duplicate destination names, overlapping
+selections, unresolved relationships, incompatible coordinate/time contexts, or
+missing dependencies. The UI MUST show the actual issue and available actions:
+rename/namespace, keep both, omit one selection, include dependency/context, or
+supply an explicit override. Omitting a selection never erases its source history.
 
-Mutations MUST accept idempotency keys and, where relevant, expected workspace
-base IDs. Responses MUST include operation IDs, affected records, warnings,
-capability/loss reports, and structured errors. Read operations SHOULD support
-pagination and scope filters. Raw arbitrary Python/C# execution is not a public
-bridge domain tool; internal adapter use is constrained to its declared work.
+Two different shape versions can coexist without proving which is correct. Physical
+intersections MAY be displayed, but manufacturability or automatic geometric
+reconciliation is not promised. The user is assembling scene assets, not asking
+CAD-GIT to merge vertex edits or synthesize a combined native CAD feature tree.
 
-The agent-agnostic skill MUST document setup, status interpretation, recovery,
-supported representations, conflict resolution, and the distinction between
-serve and native restore. It MUST instruct agents to inspect status before
-mutation, preserve recovery captures, and avoid resolving geometric conflicts
-without a user-authorized strategy. The agent MUST NOT bypass safeguards or
-silently delete alternate versions. Human-authored descriptions and agent
-summaries MUST be attributable; an agent summary is not geometric proof.
+## 10. Coordinates, composition, and validation
 
-## 17. Transport, capabilities, and security
+The shared interchange contract is units, coordinate conventions, and optional
+portable materials. Geometry is captured and selected, not live-synchronized.
+Normalization applies to exported/assembled USD; CAD-GIT MUST NOT silently change
+native document units, origin, or application settings. A user's explicit assembly
+placement is separate from automatic unit/basis conversion.
 
-No fixed app ports are required. Discovery records adapter instance, protocol
-version, app version, document IDs, and capabilities. Existing Rhino router and
-Blender community listener protocols remain separate adapters; neither is
-assumed to implement the proposed bridge protocol.
+Preserve exporter-native USD and record declared units/axis. Assembly roots SHOULD
+use a canonical Z-up, right-handed, meter coordinate system with explicit per-input
+basis/unit conversion wrappers. Changing metadata alone is not conversion. Normals,
+winding, transforms, negative scale, and instance placement need fixture tests.
 
-The service control transport SHOULD use a user-scoped local socket. Loopback
-TCP is acceptable with an unpredictable local token, bounded messages, and
-restricted origin/path handling. Remote listening is disabled. Credentials MUST
-NOT be written to portable history. Project paths and parameters are data, never
-shell commands or concatenated native command scripts.
+Source layer metadata and dependency context must remain inspectable. Heavy mesh
+data SHOULD use USDC and readable composition SHOULD use USDA. Snapshot layers
+and assembly references must be pinned, not floating `latest` paths. Session-layer
+choices needed for persistence must be authored into the saved result.
 
-The internal protocol MUST define framing, request IDs, complete-message reads,
-size limits, structured errors, deadlines, cancellation semantics, and bounded
-queues. Repeated mutation requests MUST be idempotent. Long exports have
-operation-specific deadlines, not one universal five-second timeout.
+Assembly validation MUST check stage opening, selected prim existence, reference
+closure, namespace uniqueness, material/relationship targets, unit/axis conversion,
+and finite geometry/transforms for the supported subset. Unsupported schemas or
+export omissions must be visible. Source snapshot files are never mutated to fix
+an assembly. Default output preserves composition; flatten/package creates a
+separately labelled portable export with lineage back to the assembly.
 
-Cancellation MUST preserve committed captures and publications. Queued work can
-be cancelled explicitly; an in-progress native operation can stop only at an
-adapter-declared safe boundary. Abandoning an MCP connection or timing out MUST
-NOT implicitly cancel work or roll back another client's operation.
+### 10.1 Versioned appearance and engineering materials
 
-Adapters MUST advertise capabilities such as `exact_save_capture`,
-`native_restore`, `mesh_publish`, `mesh_apply`, `identity_persistence`,
-`dependency_inventory`, `dirty_part_detection`, and supported property groups.
-Unsupported combinations MUST be blocked or left pending, never advertised as
-full round-trip support. Legacy community listeners that allow arbitrary code
-execution MUST be identified in diagnostics and remain local trusted endpoints.
+Geometry/instances can carry stable material slots referring to app-independent
+catalog assets. Rhino can store a display proxy and assignment metadata while
+Blender resolves the same appearance asset to its compatible native graph. Future
+OpenFOAM/FreeFEM/Ansys adapters resolve independent engineering representations.
+Plugins MUST preserve/remap slot bindings through native metadata plus the USD
+assignment manifest; native exporters are not presumed to do this automatically.
 
-## 18. Durability, recovery, and observability
+The project material library MUST separate appearance from engineering properties
+and their assignments. Appearance can include native Blender graphs, supported
+MaterialX, USD Preview Surface, and derived texture bakes. Engineering data can
+include typed density/constitutive properties and opaque provider material cards.
+Visual PBR parameters MUST NOT be treated as engineering density or strength.
 
-Record creation MUST stage bytes on the same filesystem, flush/fsync files as
-supported, write and verify manifests, rename into final immutable locations, and
-durably publish a commit event. Directory fsync SHOULD be used where supported.
-A record is visible as committed only after its commit event. An interrupted
-uncommitted directory is retained as recoverable staging/orphan data, not silently
-invented as a complete revision. Network/cloud-synced folders are unsupported as
-active stores until their rename and durability behavior is tested.
+Material revisions are immutable; recipes pin exact graph/data revisions and
+bindings. Selecting new Rhino geometry with an old Blender shader is a required
+first-release workflow for the tested native graph subset. USD carries the scene,
+portable look, and native asset references; restoring the exact native graph needs
+the CAD-GIT Blender adapter or an explicit native material append step. A bare USD
+import cannot be advertised as preserving arbitrary Cycles graphs.
 
-The event writer MUST serialize changes under a project lock. Branch reference
-updates MUST use expected-parent checks. SQLite indexes and convenience USD roots
-are updated after durable records and can be rebuilt. Deleting `.cadgit/` while
-the service is stopped MUST NOT destroy committed history. Active staging and
-unacknowledged recovery data MUST NOT be cleaned during operation.
+Working assignments MAY follow the latest compatible provider representation.
+Every recorded snapshot/assembly/task MUST freeze the exact resolved asset and
+representation revisions and hashes. Updating a material later never retroactively
+updates recorded history. Surface/body regions lost through geometry edits are
+marked unresolved rather than silently reassigned by slot name or face index.
 
-On restart, the service MUST validate committed events, inspect interrupted
-operations, reconnect by document identity, and compare actual managed app state
-before replaying anything. If an app applied a change but its receipt was lost,
-fingerprint inspection MUST prevent duplicate import. When outcome remains
-uncertain, mark it unknown and require recovery rather than advancing references.
-If application fails after partial mutation, the adapter MUST attempt a verified
-rollback where supported; otherwise it MUST expose the recovery capture and the
-partial state. Merely retaining a backup MUST NOT be reported as a successful
-rollback. Native undo is a convenience, not the sole recovery mechanism.
+The library MUST retain required node groups, textures, mapping dependencies, and
+provider/version provenance. Missing named attributes, UVs, object coordinate
+sources, or runtime requirements are surfaced before claiming a material works on
+new geometry. Native graph preservation is distinct from identical rendered
+appearance after geometry or renderer changes. The UI MUST distinguish portable
+viewport fallback from intended native render fidelity.
 
-Logs MUST include UTC timestamps, project/app/document IDs, operation IDs,
-capture/publication IDs, durations, and structured failure reasons. UI clients can
-localize timestamps. Status MUST distinguish capture pending, publication pending,
-incoming pending, conflict, pinned preview, incomplete dependencies, missing
-adapter, monitoring gap, and unknown apply outcome.
+USD snapshot completion and native-material preservation are separate statuses.
+If the geometry/preview export succeeds but native graph capture fails, preserve
+the USD snapshot and report native fidelity unavailable. Do not associate a later
+graph capture with the old scene unless exact state provenance is established.
+An assembly requesting native fidelity must block or obtain explicit approval for
+a fallback when that required material asset is missing.
 
-No hard latency or throughput claim is made before measurement. Release
-benchmarks MUST report native-save capture delay, export duration, application
-duration, storage growth, part count, and mesh size. Capture takes priority over
-publication/application when resources are constrained. A stopped service MUST
-not leave the apps frozen or their native save commands unusable.
+Portable representations are optional fallbacks, not a restriction that every
+material must fit one PBR subset. Unsupported graph translation MUST NOT silently
+replace a retained native graph with a simplified material. Automatic baking and
+universal renderer equivalence remain outside v1. Physical material values require
+units, provenance, validity conditions, and explicit body/region assignments; full
+FEA/FEM execution and Substance/Ansys providers remain future integrations.
 
-History queries MUST use the rebuildable index rather than reparsing all USD.
-Diffing MUST skip byte-identical immutable payloads, while still reporting native
-file changes that are not exchangeable. Scene extraction, diff computation, and
-render-buffer preparation MUST run off the UI event thread. Large models SHOULD
-load progressively with cancellation and explicit preview detail levels; reduced
-preview detail MUST NOT reduce the fidelity of retained data or resolution inputs.
-Native snapshot latency MUST be measured separately from background work; the
-tool MUST not promise zero-impact saving when it must copy a large native file.
+See [Versioned materials and cross-application lineage](MATERIALS_AND_LINEAGE.md)
+for the data model, provider boundaries, local Blender evidence, and acceptance gate.
 
-## 19. Git interoperability
+## 11. Main, reusable outputs, and native continuation
 
-`begin` SHOULD create or append a clearly delimited bridge section to `.gitignore`
-and `.gitattributes`, preserving unrelated rules. Existing files MUST NOT be
-replaced wholesale. The default Git profile ignores runtime data, application
-backup files, and large bridge history/artifact payloads; it retains working
-source/config according to the user's repository policy. The CLI MUST explain
-that ignored history is not backed up by a Git push.
+`main` is a current selection, not an autonomous process. The user explicitly saves
+an immutable assembly and then may set it as current main. Previous assemblies
+remain reopenable without a mandatory Git-style main branch graph. Main can be an
+empty valid USD stage before the first assembly exists.
 
-If native files are tracked, `.gitattributes` SHOULD mark `.3dm`, `.blend`, and
-`.usdc` as binary so text conversion and text merging are not used. Git LFS is an
-optional explicit profile, not an automatic dependency. `.gitignore` neither
-protects binary contents nor stops tracking files already committed. Git commands
-MUST NOT be used as the bridge's native capture or reconciliation implementation.
+Each main output includes a recipe and dependency lock. Moving main changes only
+the current pointer/convenience layer. Artifact exports, such as STL/3MF, renders,
+or packaged USD assets, pin the exact assembly ID and settings that produced them.
+Nothing silently repoints already recorded artifacts to the new main.
 
-## 20. Acceptance criteria
+### 11.1 Direct geometry exports for printing and reuse
 
-v0.1 is complete only when the following scenarios pass on the release matrix.
-Tests MUST exercise real adapters as well as core storage logic; mocked socket
-responses alone do not validate application behavior.
+CAD-GIT MUST export printable mesh files directly from any committed USD snapshot
+or saved assembly, including older versions and individual selected parts. The
+operation MUST work while Rhino and Blender are closed. Main promotion is not
+required to export a historical source part. STL is required in v1; 3MF, OBJ, PLY,
+and other formats are extensible exporters with explicitly declared capabilities.
+Support for a format MUST NOT be inferred solely from a filename extension.
 
-1. **Initialize/resume:** `begin` twice preserves existing project files and
-   produces one writer. Ambiguous documents remain unbound with actionable status.
-2. **Rapid saves:** several distinct saves produce recoverable native captures
-   matching each saved version, even while export lags. Unchanged saves retain
-   events without requiring duplicate payload bytes.
-3. **Export failure:** native capture survives; the failed publication is visible;
-   retry exports that exact historical capture.
-4. **Rhino to Blender:** an asymmetric, multi-part millimeter assembly arrives at
-   correct meter scale, orientation, origin, and instance placement. Repeat apply
-   creates no duplicate parts.
-5. **Blender to Rhino:** an edited/sculpted mesh arrives with identity and expected
-   shape. Its originating BRep remains recoverable and is not silently erased.
-6. **Rename/duplicate:** renames and moves retain identity; independent duplication
-   creates distinct identity. Ambiguous copied identity is detected.
-7. **Independent changes:** changes to different compatible parts combine, while
-   current animation/object identity is retained for a supported geometry update.
-8. **Topology-sensitive update:** a potentially broken rig/modifier/material
-   mapping is blocked or imported as an explicit alternative, not silently lost.
-9. **Conflict:** both apps reshape one part from a shared base. Both inputs and the
-   base remain recoverable; no latest-writer-wins overwrite occurs. Keep-both and
-   manual resolution create traceable new records.
-10. **Delete versus modify:** explicit deletion conflicts correctly; selection-only
-    and incomplete exports cannot delete omitted objects or unmanaged objects.
-11. **Historical serving:** serving a checkpoint protects dirty target state,
-    acknowledges exact applied content, pins the preview, and leaves branch
-    history unchanged. Failure to capture recovery prevents switching.
-12. **Native restore:** each saved `.3dm`/`.blend` opens from history with its
-    captured dependencies and declared limitations. Restoring creates no mutation
-    of the historical files.
-13. **Partial checkpoint:** one app save fails; status and manifest do not claim a
-    complete coordinated native checkpoint.
-14. **Crash injection:** crashes during staging, manifest commit, branch update,
-    export, and apply do not corrupt previous history or cause duplicate replay.
-15. **Integrity/storage:** missing dependency, hash corruption, disk full, and
-    unavailable target produce distinct failures without pruning history.
-16. **Rebuild:** with the service stopped and no in-flight capture, runtime index
-    deletion followed by rebuild recovers history, refs, and operation receipts.
-17. **No feedback loop:** applying incoming geometry does not create endless
-    export/import cycles. Subsequent unchanged user saves are distinguishable from
-    new local geometry edits.
-18. **Interface parity:** CLI and MCP produce the same domain effects, safeguards,
-    and error semantics, including retries with the same idempotency key.
-19. **Artifact recovery:** a registered render or print output remains linked to
-    exact sources and verifies byte-for-byte after later geometry changes.
-20. **Agent-free operation:** capture and safe auto-application continue with no
-    MCP client or AI agent connected.
-21. **Snapshot-first transaction:** unsaved edits exist in both apps. A sync first
-    commits recovery Save Copy snapshots of both, then computes changes. Failure
-    to snapshot either app prevents mutation of both. Recovery snapshots cannot
-    cause recursive synchronization.
-22. **Visual resolution:** the local viewer shows base/local/incoming/result,
-    identifies changed parts/properties, distinguishes replacement from known
-    deformation, and previews keep-both/deletion. Cancel makes no changes; confirm
-    rechecks bases. Editing during review invalidates stale plans.
-23. **Timed snapshots:** the configured interval captures dirty in-memory state
-    without changing the active native path. Busy-app postponement, disabling,
-    restart, and snapshot failure are visible and do not erase history.
-24. **Plugin extensibility:** a third export-only test plugin ingests a supported
-    USD scene through the documented protocol without changing core code. Its
-    missing identity/apply/native-recovery capabilities are reported accurately.
-    Malformed messages or plugin/worker crashes cannot corrupt history.
-25. **Synced-state provenance:** every successful sync has an immutable result
-    checkpoint linking protected inputs, typed deltas, resolution choices, and
-    per-app receipts. A failed or partial apply is never shown as fully synced.
+The source is the original committed USD scene evaluated by the reference SDK,
+not a decimated PyVista actor or whatever happens to be open in a native app. Pin
+snapshot/assembly ID, selected prims and instance occurrences, visibility/purpose
+policy, time code, placement/origin policy, geometry evaluation settings, output
+units, exporter version, and output hashes. UI Export Selected and CLI/MCP use
+the same operation. Unsaved draft exports are labelled preview artifacts and pin
+an immutable copy of the draft recipe and its inputs before export.
 
-## 21. Delivery sequence and release gate
+The export worker MUST load required payloads, apply inherited/instance transforms,
+convert coordinates/units exactly once, extract supported mesh data, triangulate
+as needed, and handle negative-scale winding/normals consistently. Unsupported
+subdivision, skinning, point-instance, or deformation evaluation MUST block the
+affected selection or require an explicitly labelled base-mesh fallback. It MUST
+not silently export a control cage while claiming the evaluated/rendered surface.
+Export reports MUST state whether native-export tessellation or additional
+evaluation produced the mesh; a later mesh export cannot recover CAD precision
+that the original USD tessellation discarded.
 
-1. Implement history records, durable commit/recovery, manifests, and verification.
-2. Prove exact native save capture and dependency inventories in both apps.
-3. Implement canonical mesh publication, stable identity, and repeatable one-way
-   application in each direction, then combine into bidirectional operation.
-4. Add dirty-state comparison, conflict preservation, and compatibility plans.
-5. Add checkpoints, protected historical serving/native restore, and branches.
-6. Deliver the local 3D comparison/resolution UI, CLI/MCP parity, plugin SDK, and
-   agent-agnostic skill; run the full engine scenario without an agent.
+STL stores triangles without a standard unit declaration or portable material
+definitions. The print preset MUST explicitly convert numeric coordinates to
+millimeters by default, show resulting bounding dimensions, and record the unit in
+the artifact manifest. Users can choose another numeric unit; changing an export
+unit MUST preserve intended physical size. Source placement is preserved unless
+an explicit local-origin/centering option is selected. These choices do not mutate
+the source scene. See [STL unit behavior](https://help.autodesk.com/view/fusion360/ENU/?caas=caas%2Fsfdcarticles%2Fsfdcarticles%2FSTL-files-exported-from-Fusion-360-are-scaled-down-in-3d-printing-software.html).
 
-Exact-save capture is the first feasibility gate. If the available community
-integrations cannot meet it, implement the minimal native hooks rather than
-weakening the history promise. Geometry reconciliation is the second gate:
-conservative pending conflicts are acceptable; silent overwrite is not.
+Multiple selections default to one file per selected part/instance. An explicit
+combined-file option may concatenate transformed meshes; it is not a Boolean union
+or an automatic repair of intersecting shells. Name collisions are resolved with
+stable selection IDs, never silent overwrites. STL export does not carry Cycles
+shader graphs or engineering material definitions; those stay linked in provenance.
 
-The release MUST include a tested compatibility matrix, storage format version,
-capability table, recovery instructions, known-loss report, and measured reference
-benchmarks. It MUST describe itself as a local Rust CAD versioning tool with visual
-resolution and supported USD exchange, not a universally lossless CAD translator or general geometric merger.
+The export report MUST check finite coordinates, valid indices, nonempty triangles,
+degenerate faces, boundary/nonmanifold edges, winding where testable, connected
+components, and bounding size. Numerical/structural errors block output. Open or
+nonmanifold geometry requires explicit acknowledgement to export as a mesh with
+issues; the artifact must retain that status. Self-intersections, wall thickness,
+and other unimplemented checks MUST be reported as not checked, not passed.
+Passing these checks is not a certification of printability. Repairs/decimation
+must be explicit derived operations with settings and lineage, never hidden edits.
 
-## 22. Research basis
+A rendered appearance does not necessarily represent printable geometry: normal
+maps, bump, shader displacement, and other renderer-only effects may not be stored
+as evaluated mesh in the USD. The UI MUST explain this when applicable. A user who
+wants those effects printed needs an appropriately evaluated/baked geometry
+snapshot, not an assumption that a material is geometric surface detail.
 
-These sources informed the design. Product claims are not treated as independent
-evidence of reliability; repository features require evaluation before reuse.
+Generated print outputs live under `artifacts/prints/<artifact-id>/` with their
+manifest, validation report, and output file(s). A user-selected destination MAY
+receive an additional copy, but the registered artifact remains immutable and
+reproducible from pinned inputs/settings. Export failures preserve source history
+and do not register a partial STL as a successful artifact. Exporting a source
+part records source lineage directly; it MUST NOT invent an intermediate main.
 
-- [OpenUSD introduction](https://openusd.org/release/intro.html): composition,
-  extensibility, path-based identity limitations, and scope of interchange.
-- [Onshape merging documentation](https://cad.onshape.com/help/Content/Document/merging.htm):
-  common-base merges, incompatible changes, and document-type limitations.
-- [Blender Studio SVN](https://studio.blender.org/tools/addons/blender_svn):
-  application-visible history/status and outdated-file awareness.
-- [Anchorpoint Blender version control](https://www.anchorpoint.app/tools/blender-version-control):
-  binary storage and specialized lock visibility trade-offs.
-- [Omniverse Live sessions](https://docs.omniverse.nvidia.com/extensions/latest/ext_core/ext_live/sessions.html):
-  separate sessions and explicit destructive merge boundaries.
-- [Updating nested USD asset paths](https://forum.aousd.org/t/updating-nested-asset-paths-recommended-workflow/1334):
-  version pinning, nested references, resolvers, and version VariantSet trade-offs.
-- [User Perspectives on Branching in Computer-Aided Design](https://arxiv.org/html/2307.02583v1):
-  qualitative evidence on navigation, branch granularity, and contextual history.
-- [Untangling the Timeline](https://arxiv.org/html/2602.09236v1): qualitative
-  evidence on version management, continuity, scope, and distribution challenges.
-- [GitCAD](https://github.com/Desktop-CNC/GitCAD) and
-  [cadvcs](https://github.com/EroPerez/cadvcs): implementation references for
-  dependency pinning and representation-specific versioning.
-- [Git attributes](https://git-scm.com/docs/gitattributes): binary conversion and
-  merge behavior; Git compatibility remains separate from history semantics.
-- [Reference OpenUSD SDK](https://github.com/PixarAnimationStudios/OpenUSD) and
-  [OpenUSD API documentation](https://openusd.org/dev/apiDocs.html): native USD
-  evaluation; an isolated SDK worker is a proposed CAD-GIT architecture choice.
-- [egui](https://github.com/emilk/egui) and [wgpu](https://wgpu.rs/): proposed
-  native UI and rendering stack, subject to a picking/performance prototype.
-- [Rerun Mesh3D](https://docs.rs/rerun/latest/rerun/archetypes/struct.Mesh3D.html),
-  [pxr_rs](https://github.com/AndrejOrsula/pxr_rs), and
-  [openusd-rs](https://github.com/FloatyMonkey/openusd-rs): alternatives to evaluate,
-  without assuming their capabilities or compatibility are equivalent to the SDK.
+### 11.2 Native continuation
 
-## 23. Relationship to existing prototype files
+The user can manually import an assembly USD into Rhino, Blender, or another native
+app and keep working. No automatic object-preserving apply engine is required.
+An optional plugin import action must be explicit and must not overwrite the
+working native file or discard unsaved edits without protection. Native backup
+copies needed for such an optional operation are recovery data, not an implied
+per-save native archive. Imported meshes do not automatically regain native BRep
+or procedural editability. The next save/export is simply another source snapshot,
+with imported lineage recorded when available.
 
-`test/source/model.3dm`, `test/source/scene.blend`, and `test/usd/` establish only a
-native-export/composition/import smoke test with a 20 mm calibration cube. They
-do not establish exact-save capture, automatic identity mapping, repeated sync,
-material write-back, conflict reconciliation, or recoverable history. The
-prototype's one-way config is superseded by this specification. Existing fixture
-files remain unchanged as evidence of the earlier experiment.
+Native editability across application round trips and optional native version
+archives are deferred in [Future features and open questions](FUTURE_FEATURES_AND_OPEN_QUESTIONS.md); neither is a V1 release requirement.
+
+For an assembly requiring native Blender material fidelity, an explicit CAD-GIT
+import can append archived material datablocks after importing USD geometry and
+bind them from the recipe. This small native-asset restoration path is required
+for the supported material profile; an automatic geometry refresh engine is not.
+
+## 12. Python implementation and extensible plugins
+
+### 12.1 Selected first-release stack
+
+| Responsibility | Selected approach |
+| --- | --- |
+| Application/domain core | Typed Python modules; no Rust requirement. |
+| USD reading/composition/authoring | Reference Pixar OpenUSD SDK through `pxr` Python bindings. |
+| Geometry extraction/display buffers | OpenUSD plus NumPy; original USD remains authoritative. |
+| Desktop shell | PySide6 Qt Widgets. |
+| Embedded viewport | PyVista/VTK with pyvistaqt and the PySide6 Qt binding. |
+| Theme | Pinned Monad System tokens mapped to Qt/QSS and viewport surfaces. |
+| CLI | Typer calling the shared domain services. |
+| Models and validation | Pydantic with published versioned JSON Schemas. |
+| Query/cache index | Python `sqlite3`; immutable files/events are authoritative. |
+| Optional agent interface | Official Python MCP SDK, stdio. |
+| Development environment | `pyproject.toml`, uv-managed environment and committed lockfile. |
+| Tests | pytest, real native-app probes, and Qt/PyVista integration tests. |
+
+The packaging baseline is a separately managed Python 3.12 environment, subject
+to a clean macOS dependency qualification before version locking. Native Blender
+and Rhino adapters run in their own supported interpreters and communicate with
+the core; the core environment MUST NOT be installed into their application Python
+paths. Select and lock a compatible OpenUSD/NumPy/VTK/PyVista/PySide6 combination;
+no untested latest-version claims or implicit dependency upgrades are permitted.
+The SDK's C++ processing and VTK rendering remain native dependencies; Python is
+the orchestration layer, not a rewritten USD parser/renderer.
+
+Hydra, native Rust USD crates, and a Rust store/service are not required for v1.
+They remain optional future alternatives if measurements/capabilities justify
+adoption. A future implementation language change must preserve record formats
+and public operations. Distribution/SDK ABI compatibility is a release gate.
+
+### 12.2 Process and package boundaries
+
+```text
+Rhino/Blender native hooks ───→ Local project service
+                                      ↑
+                         CLI / Qt UI / optional MCP
+                                      |
+                         USD/extraction workers
+                                      |
+                  Immutable project files + SQLite index
+```
+
+Use one local service writer per project. CLI/UI/MCP share domain operations;
+none maintains a competing interpretation of main, snapshots, or materials.
+USD export runs through the relevant app adapter when native access is required.
+Core USD composition/extraction MAY use isolated subprocess workers. A worker owns
+its stage; mutable SDK/Qt/VTK objects MUST NOT be shared across process boundaries.
+Opaque native asset loading remains an explicit adapter action.
+
+Suggested package boundaries are `models`, `store`, `history`, `usd`, `assembly`,
+`materials`, `plugins`, `service`, `cli`, `ui`, and `mcp`. These are Python package
+responsibilities, not independently deployed microservices. Core imports must not
+require Qt, VTK, or an MCP client when running headless history/verification tasks.
+GPU/viewer failures cannot corrupt the service writer or previous records.
+
+### 12.3 Minimal application plugins
+
+Plugins perform document discovery, native save notifications, exact-state USD
+export, metadata/slot mapping, and supported material capture/import. Optional
+blank-document/import helpers are explicit user actions. History storage,
+assembly choices, retention, and material-provider policy stay in the core.
+
+Use a versioned local executable protocol with a plugin manifest, app/version
+range, capabilities, and entry point. Plugins MAY use native Python/.NET runtimes.
+Required operations are handshake, enumerate documents, inspect capabilities,
+observe saves where supported, and export exact state. Material-aware reference
+plugins also implement capture material and restore supported assignments. An
+export-only integration can supply manually ingested snapshots without save hooks.
+
+Capabilities include exact-save/current-memory export, USD formats/schemas,
+dependency inventory, material capture/restore, slot preservation, and optional
+import. Stable per-part identity, native historical restore, and mesh-level diff
+are not prerequisites. An opaque provider asset can be retained without claiming
+it is executable or convertible in another app.
+
+Messages MUST carry protocol/version, request/operation IDs, document identity,
+origin, and structured result/error. Large arrays/files are passed through
+validated local staging references rather than unbounded JSON. Use framed/bounded
+messages, deadlines, idempotency keys for mutations, and explicit completion.
+No fixed Rhino/Blender port is assumed. Community MCP transports MAY be reused
+behind adapters, but neither an MCP client nor an agent is required at runtime.
+Unknown plugins require explicit registration; project files cannot execute code
+merely by being opened.
+
+### 12.4 Runtime and distribution qualification
+
+The first developer distribution MAY be a locked uv environment with an app/CLI
+launcher. The first user release must document or bundle its supported runtime;
+users must not compile OpenUSD to browse a project. Package SDK/Qt/VTK resources
+and record third-party licenses. Test startup, viewport/picking, worker spawning,
+path resolution, and optional Blender material restore from a clean machine.
+Do not promise a single executable or cross-platform support before those builds
+are tested. Normal local operation must not download dependencies or require
+network activation.
+
+## 13. CLI and optional MCP
+
+Canonical executable: `cad-git`. Required CLI operations are:
+
+| Command | Behavior |
+| --- | --- |
+| `init [path] --app rhino --app blender` | Create local metadata, choose base files, create empty main, and configure source definitions. |
+| `begin [path]` | Start/resume source monitoring and export queues; no auto-convergence. |
+| `stop` | Stop cleanly without closing apps or deleting staging/history. |
+| `status [--json]` | Show sources, current native paths, export state, gaps, and current main. |
+| `snapshot --source NAME` | Export current app state as a labelled USD snapshot without forcing native save. |
+| `autosnapshot on\|off [--interval SECONDS]` | Configure timed USD snapshots. |
+| `ingest PATH --source NAME` | Record an existing USD package with dependencies and declared provenance. |
+| `log [SOURCE]` | Browse source snapshot history. |
+| `branch create NAME --source SOURCE --from SNAPSHOT` | Create an independent source history head without silently changing native files. |
+| `branch use NAME --source SOURCE` | Select the next-save branch and record any explicitly imported starting state. |
+| `material list\|show\|capture` | Inspect or version project material assets using provider capabilities. |
+| `material bind --slot ID --appearance REF` | Assign a visual asset or explicit follow policy to a stable slot. |
+| `material bind --slot ID --engineering REF` | Assign a separately versioned engineering definition to its supported body/region scope. |
+| `view SNAPSHOT` | Open a selected USD snapshot in the local UI. |
+| `ui` | Open the history/assembly interface. |
+| `compose --input SNAPSHOT:PRIM ...` | Create a draft from exact selections; UI can refine the draft. |
+| `assembly save DRAFT --name NAME` | Validate and preserve an immutable assembly. |
+| `main set ASSEMBLY` | Explicitly select current main. |
+| `export REF --format FORMAT --select PRIM --output PATH` | Export a snapshot/assembly selection as USD or a supported mesh format, including STL; pin provenance and validate. |
+| `import ASSEMBLY --app APP --materials native\|portable` | Explicit supported native import/material restore through an adapter; protect current work and report fidelity. |
+| `artifact register PATH --kind KIND --from REF` | Record an output and pinned snapshot/assembly lineage. |
+| `show ID` / `lineage ID` | Inspect provenance and dependencies. |
+| `verify [ID]` / `doctor` | Check integrity and diagnose plugins, queues, and dependencies. |
+| `plugin list\|inspect\|register` | Manage explicitly registered local connectors. |
+| `mcp --project PATH` | Expose the same operations to an optional agent client over stdio. |
+
+`init` creates a blank OpenUSD scene, not an MCP geometry format. The optional
+`mcp.example.json` is a separate client launch template, not a global agent-config
+edit. Existing native base files are selected, not renamed or auto-imported. Blank
+native files can be created only by an explicit supported plugin action. `begin`
+may offer init on an uninitialized folder but must not overwrite existing metadata.
+
+Mutations support operation IDs/idempotency keys; JSON output is versioned and
+separated from diagnostics. Timeout/closing a client does not imply cancellation.
+CLI/UI/MCP MUST share one domain API. Agents cannot bypass snapshot immutability,
+source selection, or dependency checks. MCP/skill integration is optional; the UI
+is not optional in the first usable release.
+
+Example direct print export (specified interface, not yet implemented):
+
+```sh
+cad-git export rhino~3 --select /Engine/Block --format stl --units mm --output exports/block.stl
+cad-git export main --select /World/Engine/Cover --format stl --units mm --output exports/cover.stl
+```
+
+The selector must resolve to an immutable snapshot/assembly before work starts.
+Format-specific options include binary/ASCII STL, numeric units, instance scope,
+per-part/combined output, origin policy, and explicit acceptance of mesh issues.
+The optional MCP facade MUST expose the same export operation and report.
+
+## 14. Configuration
+
+Illustrative portable configuration:
+
+```json
+{
+  "schema_version": 1,
+  "implementation": {"language": "python", "usd_backend": "reference_pxr"},
+  "project": {"id": "<uuid>", "name": "engine"},
+  "sources": [
+    {"id": "<uuid>", "name": "rhino", "app": "rhino", "working_file": "source/model.3dm"},
+    {"id": "<uuid>", "name": "blender", "app": "blender", "working_file": "source/scene.blend"}
+  ],
+  "snapshots": {
+    "on_native_save": true,
+    "tool_interval_seconds": null,
+    "format": "usd",
+    "retention": "all",
+    "archive_native_files": false,
+    "require_exact_state": true
+  },
+  "assembly": {
+    "main_advancement": "explicit_selection",
+    "selection_granularity": "prim_subtree_or_instance",
+    "up_axis": "Z",
+    "meters_per_unit": 1.0,
+    "material_policy": "native_asset_with_portable_fallback",
+    "automatic_native_refresh": false
+  },
+  "ui": {"required": true, "toolkit": "pyside6", "viewport": "pyvistaqt", "theme": "monad", "theme_mode": "dark"},
+  "materials": {"path": "materials", "pin_revisions": true, "engineering_execution": false},
+  "paths": {"history": "history", "assemblies": "assemblies", "runtime": ".cadgit"}
+}
+```
+
+Machine-local endpoints, process IDs, and credentials remain outside this config.
+Config changes are recorded with snapshots/assemblies where relevant. The earlier
+`test/bridge.json` is not this schema. Do not guess a migration from its old
+one-way ownership settings.
+
+## 15. Durability, failure handling, and performance
+
+Use one project writer. Stage exports on the same filesystem, flush files as
+supported, verify hashes/manifest, rename into an immutable location, and publish
+an ordered commit event. Partially written USD must not appear as complete history.
+Index updates occur after durable publication and can be rebuilt. Main selection
+uses an expected-current check to avoid accepting a stale review accidentally.
+
+On restart, inspect staging and operation records, resume only exact inputs that
+still exist, and expose irrecoverable gaps rather than inventing versions. Failure
+or cancellation must not erase source snapshots or accepted outputs. History is
+never automatically pruned in v1. Disk-full stops recording safely with a visible
+error; a normal native save may still succeed independently.
+
+No cloud database/message broker is required. USD workers/plugins should be
+isolated so malformed input or a crash cannot corrupt the history writer. Local
+IPC requires bounded messages, typed errors, deadlines, and user-scoped access.
+Project paths are data, not shell fragments. Archive extraction and dependency
+resolution must reject path traversal and unauthorized resource access.
+
+Index the timeline without reopening every USD file. Load selected snapshots and
+payloads on demand. Run expensive export, extraction, and validation off the UI
+thread where native APIs permit. Progressive preview and cache reuse must not
+change retained snapshot fidelity. Benchmarks must report capture overhead, large
+snapshot opening, selection/assembly latency, memory, and storage growth. No
+unmeasured zero-latency or perfect-fidelity claim is permitted.
+
+Git integration is optional. Generated `.gitignore`/`.gitattributes` sections must
+preserve existing rules; native binaries are never text-merged. Ignoring history
+in Git means a push does not back it up. Complete project backup includes durable
+snapshots, assembly recipes, dependencies, event records, and artifacts.
+
+## 16. First-release acceptance criteria
+
+1. **Normal native behavior:** repeated saves keep the same working `.3dm`/`.blend`
+   paths and normal native editing/undo/backup behavior. No permanent native
+   version archive is created by default.
+2. **Every save exports:** rapid saves with distinct states yield corresponding
+   timestamped USD snapshots, not repeated exports of the eventual head. Failed
+   captures/exports are visibly distinct from successful native saves.
+3. **No event collapse:** unchanged saves retain distinct records; same-time saves
+   cannot collide. Export ordering cannot lose source-parent ordering.
+4. **Timed snapshots:** enabled tool snapshots include current unsaved state and
+   label it accurately, without overwriting or falsely saving the native file.
+5. **History UI:** first release includes source timelines, labels/status, scene
+   inspection, picking/isolation, and an embedded PyVista/VTK viewport on macOS.
+6. **Arbitrary historical splicing:** choose pieces from two different Rhino
+   snapshots and a Blender snapshot, preview them together, and save a USD assembly
+   while all original snapshots remain byte-for-byte intact.
+7. **Context/dependencies:** a selected nested mesh retains its required placement
+   and material context; an instance retains required prototype data. Unsupported
+   selections block or warn explicitly instead of silently losing dependencies.
+8. **Namespace choices:** two versions of a part can deliberately coexist. Naming
+   collisions and duplicate parent/child selection are explained and resolvable.
+9. **Main is deliberate:** save events, opening history, changing drafts, and
+   cancelling review never move main. Selecting a saved assembly moves only main.
+10. **Lineage:** from an exported artifact, trace to assembly recipe, every selected
+    source snapshot/prim, and the original app/save event, including omissions and
+    conversion settings.
+11. **Reopen previous results:** after new source saves and new main selections,
+    earlier snapshots and assemblies still open with pinned dependencies. No
+    mandatory main commit-graph implementation is needed to achieve this.
+12. **Native continuation:** manually import an assembly into Rhino or Blender,
+    continue modeling, and create a new save-triggered USD snapshot. USD import is
+    not represented as a lossless native feature-history restore.
+13. **Failure recovery:** interrupted exports, missing dependencies, disk full,
+    malformed USD, and worker/viewer crashes leave earlier history intact and
+    show actionable status. A failed export never substitutes a later native state.
+14. **Rebuild:** rebuild timeline/main query state from durable records after
+    deleting only rebuildable runtime indexes while stopped.
+15. **Plugin extension:** ingest/export through a third test plugin without
+    core changes. Missing live-save or schema capabilities are reported accurately.
+16. **Agent independence:** all required operations work through CLI/UI with no
+    AI/MCP client. Optional MCP uses identical validation and mutation rules.
+17. **Fidelity reporting:** tests distinguish successful USD preservation from
+    omitted native features, and snapshot timestamps from animation time samples.
+18. **Viewer integration:** picks return exact snapshot/prim identity, result
+    preview placement matches the saved assembly, and preview limitations are
+    explicit. Export uses original USD, not triangulated/decimated display meshes.
+19. **Historical shader reuse:** preserve an old Blender procedural graph with
+    node groups/textures, change its live version, select new Rhino geometry plus
+    the old graph, and restore/render through the adapter. Verify graph/dependency
+    preservation and lineage; preview fallback alone does not satisfy this test.
+20. **Independent material facets:** changing appearance does not alter the pinned
+    engineering data, and changing a physical material revision does not rewrite
+    the shader or any historical assembly. Unknown physics values stay unknown.
+21. **Source sub-branches:** record an explicit Rhino-to-Blender-to-Rhino chain and
+    a second Blender branch. Imported-input links and source-parent links remain
+    distinct; native paths remain user-managed and no vertex merge is required.
+22. **Provider capability limits:** preserve a sample opaque engineering card or
+    procedural-provider asset with provenance without falsely claiming the tool
+    can evaluate it, translate every property, or render it in an arbitrary app.
+23. **Slot round trip:** create a stable assignment, import into Rhino as a native
+    proxy/metadata binding, save/export, and resolve it to the pinned native Blender
+    graph through the adapter. Native names/indices may change without silently
+    changing catalog identity. Missing region mappings are reported unresolved.
+24. **Latest resolution:** a working slot can follow a new provider graph; recorded
+    snapshots/assemblies still load their original pinned revisions. An explicit
+    update creates a derived result and records both its source and new material.
+25. **Monad theme:** pinned source tokens propagate to dark/light Qt controls and
+    viewport chrome; theme changes leave material values unchanged. Keyboard focus,
+    status labels, resizing, fallback fonts, and reduced motion remain usable.
+26. **Display/source separation:** a source n-gon/subtree is triangulated or split
+    for display; picking still returns its correct source selection and assembly
+    export retains original USD. Unsupported shader/volume features remain stored
+    and visibly marked rather than silently discarded.
+27. **Packaged Python runtime:** a clean supported macOS environment can launch
+    CLI/UI, compose USD, pick PyVista actors, and reconnect to both app adapters
+    using locked dependencies without injecting packages into either native app.
+28. **Headless parity:** CLI/MCP history, recipe, and verification operations work
+    without a Qt window or GPU context; workers can fail without damaging history.
+
+29. **Direct print export:** with Rhino/Blender closed, export a selected historical
+    USD part and an assembly part to STL from UI/CLI. Reopen the outputs, verify
+    triangle geometry/bounds, and trace each artifact to exact selected inputs.
+30. **Print scale:** equivalent meter/millimeter source fixtures produce the same
+    intended STL dimensions in the configured numeric units. Instance transforms,
+    negative scale, and origin options are applied once and recorded.
+31. **Mesh/fidelity reporting:** invalid indices/nonfinite geometry block export;
+    open/nonmanifold meshes require explicit acknowledgement. Unsupported surface
+    evaluation and renderer-only bump/displacement do not silently become claimed
+    printable detail. A combined STL is not advertised as a Boolean union.
+
+## 17. Implementation sequence
+
+1. Prove save-triggered exact USD export in both reference apps, including rapid
+   saves and failure/retry behavior, without changing native working paths.
+2. Build the Python record store, source timeline, manifests, dependency inventories,
+   and minimal CLI; retain the existing 20 mm exchange fixture as an early test.
+3. Prove PyVista/Qt integration and source-aware picking. This is a first
+   release gate, not a future UI task.
+4. Implement selection recipes, context/dependency extraction, assembly preview,
+   immutable output, and explicit main selection.
+5. Complete the history/assembly UI, recovery tests, plugin SDK, and optional MCP.
+6. Prove historical native shader reuse, independent material assignments, and
+   source sub-branch/import lineage in the engine workflow.
+7. Ship direct STL export, dimension/mesh reports, and artifact lineage from both
+   historical source snapshots and saved assemblies without native-app access.
+
+The tested release matrix starts with macOS, Rhino 8, and Blender 5.2 LTS. Exact
+app/plugin/SDK builds must be recorded. Existing smoke tests observed Rhino
+8.36.26296.17002 and Blender 5.2.3 LTS; these observations do not establish the save
+hooks, history, or UI implementation. OpenUSD/PyVista/Qt packaging choices
+require executable qualification before release.
+
+## 18. Research and relationship to earlier designs
+
+This revision selects Python, PySide6/PyVista, and Monad System, and supersedes
+earlier Rust-first/Hydra-required assumptions as well as permanent native-save history,
+automatic native application, per-part/vertex merge tracking, and mandatory Git-like
+main commit graphs. The durable unit is a USD snapshot; the core user action is
+selecting pieces into a reusable USD assembly with lineage. Earlier repository
+fixtures remain unchanged and do not imply that the new product is implemented.
+
+- [Historical USD/Rust assessment](USD_ARCHITECTURE.md): earlier candidate
+  research. Python with reference OpenUSD is now selected; Rust recommendations
+  and native-history assumptions in that assessment are superseded.
+- [Related systems](RELATED_SYSTEMS.md): Prism, Speckle, FreeCAD History Workbench,
+  AYON, and OpenAssetIO; use them as reuse/workflow comparisons, not evidence of
+  unique CAD-GIT capability.
+- [Materials and lineage](MATERIALS_AND_LINEAGE.md): native graph preservation,
+  portable materials, engineering facets, and future Substance/Ansys integration.
+- [OpenUSD glossary](https://openusd.org/release/glossary.html): composition,
+  references/payloads, paths, and stage/layer semantics.
+- [OpenUSD toolset](https://openusd.org/release/toolset.html): viewer, validation,
+  and export tools; none automatically supplies CAD-GIT's snapshot/assembly ledger.
+- [PyVistaQt integration](https://qt.pyvista.org/usage.html) and
+  [PyVista picking](https://docs.pyvista.org/api/plotting/_autosummary/pyvista.plotter.enable_mesh_picking):
+  selected viewport integration references.
+- [Monad System](https://github.com/range-et/monad_system/tree/358d0559da407897957a5817b24f9ebd8774b791):
+  reviewed theme source and pinned design-token revision.
+- [PySide6](https://doc.qt.io/qtforpython-6/), [Typer](https://typer.tiangolo.com/),
+  [Pydantic](https://docs.pydantic.dev/latest/), [uv](https://docs.astral.sh/uv/),
+  and [Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk):
+  implementation dependencies to pin and qualify before release.
+
+## 19. Review summary and remaining engineering gates
+
+This draft commits to Python with reference OpenUSD, PySide6/PyVista inspection,
+Monad theme tokens, local immutable USD history, independent source branches,
+explicit main selection, reusable assembly recipes, versioned material slots and
+provider assets, and optional AI integration. The UI is required in v1.
+Direct STL export from historical snapshots and assemblies is also required in v1.
+
+It deliberately excludes feature/vertex merging, automatic native geometry sync,
+full native scene history, renderer equivalence, cloud collaboration, and execution
+of FEA/CFD/FEM solvers. Engineering cards can be preserved and assigned before a
+provider can evaluate them. Native material-only assets are retained when required
+for the declared Blender graph-fidelity workflow.
+
+The remaining implementation gates are executable evidence, not permission to
+silently weaken the contract: exact-save hooks; a clean Python/OpenUSD/Qt/VTK build;
+dependency-aware selection extraction; slot round trips; historical shader restore;
+and a packaged UI with correct picking and lineage. Unsupported features require
+explicit capability reports and must not be marketed as completed functionality.
+
+The first reviewable vertical slice is: initialize a folder, save in both apps,
+browse their USD snapshots, pick pieces in the Monad-themed PyVista UI, bind an old
+material, save an assembly, set main, and explicitly import it into Blender with
+the supported native graph. No agent must be needed at any step.
