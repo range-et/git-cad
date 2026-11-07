@@ -1,0 +1,5 @@
+.bridge/
+*.blend1
+*.blend2
+*.3dmbak
+.DS_Store

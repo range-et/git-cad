@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "status": "proposal; bridge runtime not implemented",
+  "project": {
+    "id": "f367d2ee-1d60-4919-83b4-a045cc7f049f",
+    "name": "test"
+  },
+  "paths": {
+    "rhino": "source/model.3dm",
+    "blender": "source/scene.blend",
+    "usd_stage": "usd/scene.usda",
+    "usd_geometry": "usd/geometry.usda",
+    "usd_look": "usd/look.usda",
+    "assets": "assets",
+    "artifacts": "artifacts",
+    "history": "history",
+    "runtime": ".bridge"
+  },
+  "ownership": {
+    "cad": "rhino",
+    "lookdev_cameras_lighting": "blender",
+    "usd_geometry": "rhino_adapter",
+    "usd_look": "bridge_look_writer"
+  },
+  "coordinates": {
+    "rhino_units": "millimeters",
+    "usd_meters_per_unit": 0.001,
+    "usd_up_axis": "Y",
+    "blender_meters_per_unit": 1.0
+  },
+  "sync": {
+    "direction": "rhino_to_blender",
+    "trigger": "manual",
+    "selection_mode": "all",
+    "managed_collection": "BridgeGeometry",
+    "identity": "rhino_document_id + object_guid + part_id",
+    "publish": "validated_immutable_revision_then_atomic_root_switch",
+    "on_missing_object": "remove_only_bridge_owned_objects",
+    "meshing": {
+      "preset": "default",
+      "absolute_tolerance_mm": 0.01
+    }
+  },
+  "history": {
+    "mode": "explicit_checkpoint",
+    "immutable": true,
+    "include": [
+      "source",
+      "usd",
+      "assets",
+      "bridge.json"
+    ],
+    "manifest": "manifest.json"
+  },
+  "artifacts": {
+    "layout": "<kind>/<artifact-id>/",
+    "manifest": "manifest.json",
+    "required_provenance": [
+      "source_revision",
+      "source_hashes",
+      "exporter_version",
+      "settings",
+      "units",
+      "created_at"
+    ]
+  },
+  "connections": {
+    "discovery": "machine-local .bridge/connections.local.json; never use as portable project identity"
+  }
+}

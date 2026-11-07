@@ -1,0 +1,49 @@
+{
+  "checked_at": "2026-11-07T17:21:52.331089+00:00",
+  "fixture": {
+    "rhino_guid": "5d31d8a7-9f40-4c7f-aef0-ff43ee860001",
+    "usd_prim": "/Rhino/Geometry/Default/CalibrationCube_20mm_mesh0",
+    "rhino_native_write": true,
+    "rhino_usd_write": true,
+    "openusd_stage_open": true,
+    "blender_import": "FINISHED",
+    "imported_mesh_count": 1,
+    "dimensions_m": [
+      0.020000001415610313,
+      0.020000001415610313,
+      0.020000001415610313
+    ]
+  },
+  "limitations": [
+    "No repeat-sync test; adapters not implemented",
+    "No material write-back",
+    "No automatic GUID mapping; fixture mapping assigned explicitly",
+    "No history checkpoint created"
+  ],
+  "files": {
+    "source/model.3dm": {
+      "bytes": 32066,
+      "sha256": "e42661f45fc841aaa3105a0922457b69fb6715d7e1369cf3aa0afe305129d1f9"
+    },
+    "source/scene.blend": {
+      "bytes": 106705,
+      "sha256": "dfd05589cc06080fff859862578642b529598822f5198ae7789d0da93d8623c9"
+    },
+    "usd/geometry.usda": {
+      "bytes": 4000,
+      "sha256": "f7541d979bc564c12990eeaef297e670b8a7f7f1586ae7965aab75257d51a8a7"
+    },
+    "usd/look.usda": {
+      "bytes": 91,
+      "sha256": "53c85b5ffa9b3e572cab8b959ee0a32cb4d8cdeff7ddc6cac0637938f734167c"
+    },
+    "usd/scene.usda": {
+      "bytes": 134,
+      "sha256": "136ffd16f2e3a6da361b1e67b67e547f0b9a8a161a101ecf06b398a2406560cc"
+    },
+    "bridge.json": {
+      "bytes": 1796,
+      "sha256": "84ec831b31fa0bfb16bc105c3ec1b1fce6329585a59ae7d37317f26e9b9dcdb1"
+    }
+  }
+}

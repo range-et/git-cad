@@ -1,0 +1,4 @@
+#usda 1.0
+(
+    doc = "Reserved for portable look overrides. No overrides authored yet."
+)
