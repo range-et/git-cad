@@ -70,6 +70,20 @@ retains the logical revision ID. Supported native Blender graphs are restored on
 new-file handoff. The library can store other native files without claiming that
 all their contents or graph formats can be evaluated by the manager.
 
+**Rendered preview** displays USD Preview Surface base-color, roughness, metallic
+and opacity image maps in saved snapshots and assembly drafts, including images
+inside USDZ packages. Indexed face-varying UV seams, vertex/uniform/constant UVs,
+custom UV-set names and UsdTransform2d nodes are supported. Images are decoded
+through the USD resolver and resized to at most 2048 pixels per side for display.
+Raw/sRGB/auto color spaces, texture channels and scale/bias are honored.
+
+Without authored UVs, the viewport uses a labeled box projection for inspection;
+it does not write UVs into source snapshots or exports. A surface's maps must use
+matching coordinates and S/T wrap modes. Missing/unsupported images, UVs or shader
+connections produce inspection warnings. Normal/displacement maps, UDIM sets and
+native renderer graphs are not evaluated. This is an interactive preview rather
+than a native-renderer match.
+
 ## Browser UI
 
 A top-level workspace switch preserves geometry tabs, selections and draft state.

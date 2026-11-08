@@ -170,3 +170,32 @@ def test_material_selection_is_gated_even_before_an_assembly_is_saved(monkeypatc
     assert FEATURE in data['required_features']
     monkeypatch.setattr(compatibility,'SUPPORTED_FEATURES',frozenset())
     with pytest.raises(CadgitError,match='unsupported features'):compatibility.check_compatibility(data,'Older reader',legacy=True)
+
+
+@pytest.mark.parametrize('failure',['missing','copy','validation','commit'])
+def test_failed_library_import_removes_only_its_partial_staging(tmp_path,monkeypatch,failure):
+    import cadgit.library as module
+    p,lib=project(tmp_path);source=tmp_path/'original.txt';source.write_text('keep original')
+    preserved=p.root/'.cadgit/staging/native-recovery';preserved.mkdir();(preserved/'scene.usda').write_text('keep recovery input')
+    if failure=='missing':source.unlink()
+    elif failure=='copy':
+        def fail_copy(source,target):
+            Path(target).write_bytes(b'partial');raise OSError('copy interrupted')
+        monkeypatch.setattr(module.shutil,'copy2',fail_copy)
+    elif failure=='commit':
+        def fail_commit(*args):raise OSError('commit interrupted')
+        monkeypatch.setattr(p,'commit',fail_commit)
+    with pytest.raises((CadgitError,OSError)):
+        lib.import_asset(source,tags=[None] if failure=='validation' else None)
+    assert list((p.root/'.cadgit/staging').iterdir())==[preserved]
+    assert (preserved/'scene.usda').read_text()=='keep recovery input'
+    if failure!='missing':assert source.read_text()=='keep original'
+    assert not lib.records()
+
+
+@pytest.mark.parametrize('provenance',[[],{'license':None},{'license':'unknown'},{'source_url':42},{'license':{'url':42}}])
+def test_invalid_provenance_has_actionable_error_without_staging(tmp_path,provenance):
+    p,lib=project(tmp_path)
+    with pytest.raises(CadgitError,match='provenance|license|URLs'):
+        lib.create_material('Material',provenance=provenance)
+    assert not lib.records() and not list((p.root/'.cadgit/staging').iterdir())

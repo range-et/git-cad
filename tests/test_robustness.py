@@ -176,3 +176,16 @@ def test_material_payload_corruption_invalidates_dependent_assembly(tmp_path):
     a=assemble(p,[{'snapshot_id':r['id'],'prim_path':'/World/Part','material_revision':'mat_fixture'}]);assert p.verify(a['id'])['ok']
     blob.write_bytes(b'changed shader');assert not p.verify(a['id'])['ok']
     with pytest.raises(CadgitError,match='integrity'):export_usd(p,a['id'],tmp_path/'broken.usdz')
+
+
+@pytest.mark.parametrize('allow_issues',[False,True])
+def test_stl_rejects_meshes_with_no_exportable_faces(tmp_path,allow_issues):
+    from pxr import UsdGeom
+    p=Project.init(tmp_path/'project');source=box(tmp_path/'holes.usda')
+    stage=open_stage(source)
+    UsdGeom.Mesh(stage.GetPrimAtPath('/World/Part')).GetHoleIndicesAttr().Set([0,1,2,3,4,5])
+    stage.GetRootLayer().Save();del stage
+    snapshot=p.ingest(source);output=tmp_path/'empty.stl'
+    with pytest.raises(CadgitError,match='no exportable mesh faces'):
+        export_stl(p,snapshot['id'],output,allow_issues=allow_issues)
+    assert not output.exists() and not p.records('artifacts/prints')

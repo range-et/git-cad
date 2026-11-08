@@ -38,6 +38,19 @@ try:
     assert not window.draft[0]['library_material_revision']
     # Entire unfamiliar metadata/precise values survive an untouched material editor.
     image=next(r for r in lib.records() if r['kind']=='image');doc=next(r for r in lib.records() if r['kind']=='document')
+    # A texture-only appearance is not a physical-only material. Its card and
+    # inspector show the pinned base-color image, even without a scalar color.
+    map_only=lib.create_material('Texture only',{'appearance':{'maps':{'base_color':image['id']}}})
+    browser.refresh();browser.select_revision(map_only['id']);app.processEvents()
+    assert browser.preview.pixmap() is not None and not browser.preview.pixmap().isNull()
+    assert browser.thumbnail(map_only,material_swatch=True).toImage()==browser.thumbnail(image).toImage()
+    assert 'Pinned base-color image' in browser.preview.toolTip()
+    window.resize(1000,640);app.processEvents()
+    assert browser.preview.pixmap().width()<=browser.preview.width() and browser.preview.pixmap().height()<=browser.preview.height()
+    assert browser.preview.geometry().bottom()<browser.inspector.geometry().top()
+    # Extreme aspect ratios retain at least one pixel when making a thumbnail.
+    narrow=p.root/'source/skinny.png';canvas=QtGui.QImage(8192,1,QtGui.QImage.Format_RGB32);canvas.fill(QtGui.QColor('red'));canvas.save(str(narrow));skinny=lib.import_asset(narrow)
+    thumbnail=browser.thumbnail(skinny);assert thumbnail and thumbnail.width()<=112 and thumbnail.height()==1
     shader=p.root/'source/graph.mtlx';shader.write_text('<materialx/>');graph=lib.import_asset(shader)
     definition={'physical':{'properties':{'density':{'value':1234,'unit':'kg/m3','source':'Synthetic fixture only','status':'fixture','conditions':{'temperature':23},'future_extra':True}}},'appearance':{'native_graph':{'revision_id':graph['id'],'future_provider':'x'},'preview':{'base_color':[.111123456,.222234567,.333345678],'roughness':.456789123,'metallic':.123456789},'maps':{'base_color':{'revision_id':image['id'],'color_space':'ACEScg','uv_set':'custom_uv','extensions':{'future':1}}}},'documents':[{'revision_id':doc['id'],'note':'keep reference metadata'}]}
     revision=lib.create_material('Preservation fixture',definition);editor=MaterialEditor(lib,revision)

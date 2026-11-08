@@ -117,3 +117,56 @@ def test_recomposed_material_identity_survives_assembly_history(tmp_path):
     path=first['bindings'][0]['prim_path']
     second=assemble(p,[{'snapshot_id':first['id'],'prim_path':path}])
     assert second['bindings'][0]['material_revision']==mid
+
+
+def test_assembly_preserves_distinct_materials_with_same_leaf_name(tmp_path):
+    from pxr import Sdf, UsdShade
+    p = Project.init(tmp_path/'project')
+    path = box(tmp_path/'materials.usda')
+    stage = Usd.Stage.Open(str(path))
+    original = stage.GetPrimAtPath('/World/Part')
+    # Several meshes share one shader; another shader has the same leaf name.
+    for name, scope, color in [('Part','A',(1,0,0)),('Second','B',(0,0,1)),('Third','A',(1,0,0))]:
+        if name != 'Part':
+            Sdf.CopySpec(stage.GetRootLayer(), original.GetPath(), stage.GetRootLayer(), '/World/'+name)
+        material = UsdShade.Material.Define(stage, '/Looks/'+scope+'/Material')
+        shader = UsdShade.Shader.Define(stage, str(material.GetPath())+'/Preview')
+        shader.CreateIdAttr('UsdPreviewSurface')
+        shader.CreateInput('diffuseColor', Sdf.ValueTypeNames.Color3f).Set(Gf.Vec3f(*color))
+        material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), 'surface')
+        UsdShade.MaterialBindingAPI.Apply(stage.GetPrimAtPath('/World/'+name)).Bind(material)
+    stage.GetRootLayer().Save()
+    snapshot = p.ingest(path)
+    assembly = assemble(p, [{'snapshot_id':snapshot['id'], 'prim_path':'/World'}])
+    colors = {part['name']:part['color'] for part in meshes(p.stage_path(assembly))}
+    assert colors == {'Part':(1,0,0), 'Second':(0,0,1), 'Third':(1,0,0)}
+    composed = open_stage(p.stage_path(assembly))
+    materials = [prim for prim in composed.Traverse() if prim.IsA(UsdShade.Material)]
+    assert len(materials) == 2
+    assert p.verify(assembly)['ok']
+
+
+def test_assembly_rejects_external_shader_nodes_without_committing(tmp_path):
+    from pxr import Sdf, UsdShade
+    p = Project.init(tmp_path/'project')
+    path = box(tmp_path/'external_shader.usda')
+    stage = Usd.Stage.Open(str(path))
+    material = UsdShade.Material.Define(stage, '/Looks/Red')
+    shader = UsdShade.Shader.Define(stage, '/Shared/Preview')
+    shader.CreateIdAttr('UsdPreviewSurface')
+    shader.CreateInput('diffuseColor', Sdf.ValueTypeNames.Color3f).Set(Gf.Vec3f(1,0,0))
+    material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), 'surface')
+    UsdShade.MaterialBindingAPI.Apply(stage.GetPrimAtPath('/World/Part')).Bind(material)
+    stage.GetRootLayer().Save()
+    snapshot = p.ingest(path)
+    assert meshes(p.stage_path(snapshot))[0]['color'] == (1,0,0)
+    with pytest.raises(CadgitError, match='self-contained material shader network'):
+        assemble(p, [{'snapshot_id':snapshot['id'], 'prim_path':'/World/Part'}])
+    assert p.records('assemblies') == []
+    assert p.verify(snapshot)['ok']
+    # An explicit library appearance replaces the source network completely.
+    from cadgit.library import Library
+    appearance = Library(p).create_material('Blue', {'appearance':{'preview':{'base_color':[0,0,1]}}})
+    assembly = assemble(p, [{'snapshot_id':snapshot['id'], 'prim_path':'/World/Part',
+                             'library_material_revision':appearance['id']}])
+    assert meshes(p.stage_path(assembly))[0]['color'] == (0,0,1)

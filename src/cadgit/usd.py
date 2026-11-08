@@ -24,12 +24,13 @@ def basis(stage):
     return m * Gf.Matrix4d().SetScale(scale)
 
 
-def meshes(path, selection=None, time=0.0):
+def meshes(path, selection=None, time=0.0, include_textures=False, material_override=None):
     stage = open_stage(path)
     selected = stage.GetPrimAtPath(selection) if selection else stage.GetPseudoRoot()
     if not selected: raise CadgitError(f"Prim not found: {selection}")
-    cache = UsdGeom.XformCache(Usd.TimeCode(time)); conversion = basis(stage)
-    output = []
+    sample_time=Usd.TimeCode(time)
+    cache = UsdGeom.XformCache(sample_time); conversion = basis(stage)
+    output = [];texture_cache={}
     for prim in Usd.PrimRange(selected, Usd.TraverseInstanceProxies()):
         if not prim.IsA(UsdGeom.Mesh): continue
         imageable = UsdGeom.Imageable(prim)
@@ -45,34 +46,50 @@ def meshes(path, selection=None, time=0.0):
         p4 = np.column_stack([pts, np.ones(len(pts))]) @ np.array(transform)
         worldpts = p4[:, :3]
         if not np.isfinite(worldpts).all():raise CadgitError(f"Non-finite world-space geometry: {prim.GetPath()}")
-        faces = []; i = 0
+        faces = []; corners=[]; i = 0
         reverse = (np.linalg.det(np.array(transform)[:3,:3]) < 0) != (mesh.GetOrientationAttr().Get() == "leftHanded")
         holes = set(mesh.GetHoleIndicesAttr().Get() or [])
         for face_idx, count in enumerate(counts):
-            ids = indices[i:i+count]; i += count
+            start=i;ids = indices[i:i+count]; i += count
             if face_idx in holes: continue
             if reverse: ids = ids[::-1]
             faces.extend([int(count), *ids.tolist()])
+            if include_textures:corners.extend(range(i-1,start-1,-1) if reverse else range(start,i))
         color = (0.66, 0.72, 0.78)
-        display = mesh.GetDisplayColorAttr().Get()
+        display_primvar=UsdGeom.PrimvarsAPI(mesh).FindPrimvarWithInheritance('displayColor')
+        display=display_primvar.ComputeFlattened(sample_time) if display_primvar else None
         if display: color = tuple(float(x) for x in display[0])
         material, relation = UsdShade.MaterialBindingAPI(prim).ComputeBoundMaterial()
-        matname = None;metallic=0.0;roughness=0.4
+        texture_mesh=mesh
+        if material_override and material_override[0]['definition'].get('appearance'):
+            # Draft overrides use the same USD authoring as saved assemblies,
+            # in a disposable stage. UVs are still read from the source mesh.
+            override_stage=Usd.Stage.CreateInMemory();override_stage.DefinePrim('/World','Xform')
+            target=override_stage.DefinePrim('/World/Part','Mesh')
+            bind_library_preview(override_stage,target,material_override[0],material_override[1],'/World/Looks/PreviewMaterial')
+            material=UsdShade.MaterialBindingAPI(target).ComputeBoundMaterial()[0]
+        matname = None;metallic=0.0;roughness=0.4;opacity=1.;shader=None
         if material:
             matname = material.GetPrim().GetName()
             shader = material.ComputeSurfaceSource()[0]
             if shader:
-                value = shader.GetInput("diffuseColor").Get()
+                value = shader.GetInput("diffuseColor").Get(sample_time)
                 if value is not None: color = tuple(float(x) for x in value)
                 for parameter in ['metallic','roughness']:
-                    value=shader.GetInput(parameter).Get()
+                    value=shader.GetInput(parameter).Get(sample_time)
                     if isinstance(value,(float,int)) and math.isfinite(value):
                         if parameter=='metallic':metallic=max(0.,min(1.,float(value)))
                         else:roughness=max(0.,min(1.,float(value)))
+                value=shader.GetInput('opacity').Get(sample_time)
+                if isinstance(value,(float,int)) and math.isfinite(value):opacity=max(0.,min(1.,float(value)))
         warnings = []
+        texture_maps={}
+        if include_textures and shader:
+            from .texture_preview import surface_maps
+            texture_maps=surface_maps(texture_mesh,shader,counts,indices,np.asarray(corners,dtype=int),Usd.TimeCode(time),warnings,texture_cache)
         if mesh.GetSubdivisionSchemeAttr().Get() != "none": warnings.append("Subdivision displayed as authored base mesh")
-        if prim.HasAPI(UsdShade.MaterialBindingAPI) or material: warnings.append("Material shown as a basic color; native shaders are not evaluated")
-        output.append({"path": str(prim.GetPath()), "name": prim.GetName(), "points": worldpts, "faces": np.array(faces, dtype=np.int64), "color": color, "material_name": matname, "metallic":metallic,"roughness":roughness, "warnings": warnings, "subdivision": mesh.GetSubdivisionSchemeAttr().Get()})
+        if material and shader and shader.GetIdAttr().Get()!='UsdPreviewSurface':warnings.append('Native shader graphs are not evaluated; only USD preview surfaces are supported')
+        output.append({"path": str(prim.GetPath()), "name": prim.GetName(), "points": worldpts, "faces": np.array(faces, dtype=np.int64), "color": color, "material_name": matname, "metallic":metallic,"roughness":roughness,'opacity':opacity,'texture_maps':texture_maps, "warnings": warnings, "subdivision": mesh.GetSubdivisionSchemeAttr().Get()})
     return output
 
 
@@ -139,6 +156,17 @@ def assemble(project, selections, label="Untitled assembly"):
             dest = Sdf.Path(f"/World/Piece_{n+1}_{Sdf.Path.MakeValidIdentifier(sel.label) if hasattr(Sdf.Path, 'MakeValidIdentifier') else 'asset'}")
             # Prefix root names deterministically; leaf mesh names remain known for material mapping.
             if not Sdf.CopySpec(flat, source.GetPath(), stage.GetRootLayer(), dest): raise CadgitError("Cannot copy selected USD subtree")
+            # Selecting a subtree severs its ancestor namespace. Materialize
+            # value-producing inherited primvars at the new root so UVs (and
+            # other constant primvars) retain their original composed meaning.
+            for primvar in UsdGeom.PrimvarsAPI(source).FindPrimvarsWithInheritance():
+                attribute=primvar.GetAttr()
+                if attribute.GetPrim()==source:continue
+                properties=[attribute]
+                if primvar.IsIndexed():properties.append(primvar.GetIndicesAttr())
+                for property in properties:
+                    if not Sdf.CopySpec(flat,property.GetPath(),stage.GetRootLayer(),dest.AppendProperty(property.GetName())):
+                        raise CadgitError('Cannot preserve inherited primvar: '+str(property.GetPath()))
             copied = stage.GetPrimAtPath(dest)
             xf = UsdGeom.Xformable(copied)
             # Snapshot inspection time is explicit and currently fixed to time zero.
@@ -148,6 +176,7 @@ def assemble(project, selections, label="Untitled assembly"):
             xf.ClearXformOpOrder(); xf.SetResetXformStack(False); xf.AddTransformOp().Set(world)
             copied.SetDisplayName(sel.label)
             copied.CreateAttribute("userProperties:cadgit:selection", Sdf.ValueTypeNames.String).Set(f"{aid}:{n}")
+            material_paths = {}
             for child in Usd.PrimRange(source):
                 if child != source and UsdGeom.Xformable(child) and UsdGeom.Xformable(child).GetResetXformStack():
                     raise CadgitError("Selected subtree has reset transform stacks; select individual mesh roots instead")
@@ -156,10 +185,28 @@ def assemble(project, selections, label="Untitled assembly"):
                 if not target or not (child.IsA(UsdGeom.Mesh) or child.IsA(UsdGeom.Subset)): continue
                 bound = UsdShade.MaterialBindingAPI(child).ComputeBoundMaterial()[0]
                 matname = bound.GetPrim().GetName() if bound else None
-                if bound:
-                    mat_dest = Sdf.Path(f"/World/Looks/S{n}_{bound.GetPrim().GetName()}")
-                    stage.DefinePrim("/World/Looks", "Scope")
-                    if not stage.GetPrimAtPath(mat_dest): Sdf.CopySpec(flat, bound.GetPath(), stage.GetRootLayer(), mat_dest)
+                if bound and not (chosen_library and chosen_library['definition'].get('appearance')):
+                    # Leaf names need not be unique across USD material scopes.
+                    # Preserve full source identity when sharing copied materials.
+                    source_material_path = bound.GetPath()
+                    if source_material_path not in material_paths:
+                        # CopySpec remaps connections within the copied subtree,
+                        # but cannot preserve shader nodes authored elsewhere.
+                        for shader_prim in Usd.PrimRange(bound.GetPrim()):
+                            for attribute in shader_prim.GetAttributes():
+                                for connection in attribute.GetConnections():
+                                    if not connection.GetPrimPath().HasPrefix(source_material_path):
+                                        raise CadgitError(
+                                            'Material shader connection leaves its subtree: '
+                                            + str(attribute.GetPath()) + ' -> ' + str(connection)
+                                            + '. Use a self-contained material shader network '
+                                            'or choose a library appearance.')
+                        mat_dest = Sdf.Path(f"/World/Looks/S{n}_M{len(material_paths)}_{bound.GetPrim().GetName()}")
+                        stage.DefinePrim("/World/Looks", "Scope")
+                        if not Sdf.CopySpec(flat, source_material_path, stage.GetRootLayer(), mat_dest):
+                            raise CadgitError("Cannot copy selected material: " + str(source_material_path))
+                        material_paths[source_material_path] = mat_dest
+                    mat_dest = material_paths[source_material_path]
                     UsdShade.MaterialBindingAPI.Apply(target).Bind(UsdShade.Material(stage.GetPrimAtPath(mat_dest)))
                 inherited_library=child.GetAttribute('userProperties:cadgit:library_material_revision').Get()
                 logical=sel.library_material_revision or (inherited_library if not sel.material_revision else None)
@@ -218,6 +265,7 @@ def export_stl(project, ref, output=None, select=None, units="mm", allow_issues=
     for mesh in geometries[1:]: combined = combined.merge(mesh, merge_points=False)
     clean = combined.clean(tolerance=1e-9, absolute=True)
     triangles = np.asarray(combined.faces).reshape(-1, 4)[:, 1:]
+    if not len(triangles):raise CadgitError('Selection contains no exportable mesh faces')
     points = np.asarray(combined.points)
     cross = np.cross(points[triangles[:,1]]-points[triangles[:,0]], points[triangles[:,2]]-points[triangles[:,0]])
     degenerate = int(np.count_nonzero(np.linalg.norm(cross, axis=1) <= 1e-14))

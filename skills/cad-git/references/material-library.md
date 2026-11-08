@@ -153,8 +153,12 @@ Verification checks hashes and dependencies. It does not certify a native shader
 engineering values, UVs or a render result. Portable USD map projection supports
 base_color, roughness, metallic and opacity with raw/sRGB/auto color spaces;
 unsupported map roles/color spaces remain recorded and need a compatible native
-representation or explicit conversion. The inspection viewport uses a basic
-preview; it does not evaluate Cycles. Shader formats other than a supported
+representation or explicit conversion. Rendered preview displays these image
+maps, including USDZ-contained images and indexed UV seams. Missing UVs get an
+explicit preview-only box projection; exported geometry remains unchanged. Maps
+on a surface must share coordinates and wrapping. Unsupported texture setups show
+warnings. The viewport does not evaluate Cycles or normal/displacement maps.
+Shader formats other than a supported
 `.blend` graph can be archived without claiming Blender restoration.
 
 Native captures keep the logical material association and separately capture the

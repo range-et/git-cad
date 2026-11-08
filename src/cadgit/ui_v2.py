@@ -46,15 +46,37 @@ class SnapshotTab(W.QWidget):
                     self.picked.emit(path)
         return super().eventFilter(watched,event)
     def display(self,parts,info=None):
-        self.parts=parts;self.info=info or {};self.plotter.clear();self.paths={};self.picker.InitializePickList()
+        from .texture_preview import render_maps
+        self.parts=parts;self.info=info or {};self.plotter.clear();self.paths={};self.material_textures={};self.picker.InitializePickList()
         for i,part in enumerate(parts):
             poly=pv.PolyData(part['points'],part['faces'])
+            maps=render_maps(part)
+            if maps and len(maps['uv']):
+                # USD UV seams are per face corner, whereas VTK UVs are per point.
+                # Duplicate render vertices only; retain source geometry for exports.
+                poly.compute_normals(cell_normals=False,consistent_normals=False,inplace=True)
+                ids=[];faces=[];offset=0
+                while offset<len(part['faces']):
+                    count=int(part['faces'][offset]);ids.extend(part['faces'][offset+1:offset+1+count]);faces.extend([count,*range(len(ids)-count,len(ids))]);offset+=count+1
+                normals=poly.point_data['Normals'][ids];poly=pv.PolyData(part['points'][ids],faces)
+                poly.point_data['Normals']=normals;poly.point_data.active_normals_name='Normals';poly.active_texture_coordinates=maps['uv']
+                textures={}
+                for key in ['base_color','orm']:
+                    if key not in maps:continue
+                    texture=pv.Texture(maps[key]);texture.interpolate=True;texture.mipmap=True
+                    texture.SetWrap({'repeat':texture.Repeat,'clamp':texture.ClampToEdge,'black':texture.ClampToBorder,'mirror':texture.MirroredRepeat}[maps['wrap']])
+                    texture.SetBorderColor((0,0,0,maps['border_opacity']) if key=='base_color' else maps['orm_border'])
+                    texture.SetUseSRGBColorSpace(key=='base_color');textures[key]=texture
+                self.material_textures[i]=textures
             actor=self.plotter.add_mesh(poly,color=part['color'],smooth_shading=True,split_sharp_edges=True,show_edges=False,name='mesh_'+str(i),specular=0.35,specular_power=30)
+            for key,texture in self.material_textures.get(i,{}).items():
+                if key=='base_color':actor.prop.SetBaseColorTexture(texture)
+                elif key=='orm':actor.prop.SetORMTexture(texture)
             self.paths[actor.GetAddressAsString('')]=part['path'];self.picker.AddPickList(actor)
         self.plotter.add_axes();self.plotter.view_isometric();self.plotter.reset_camera()
         self.setup_studio();self.apply_mode();self.load_state='ready';self.load_notice.hide();self.loaded.emit()
     def load_error(self,message):
-        self.load_state='error';self.load_notice.setText('Unable to load this version. Click its graph node to retry.\n'+str(message));self.load_notice.show()
+        self.load_state='error';self.load_notice.setText(('Unable to load this version. Click its graph node to retry.' if self.record else 'Unable to load this draft. Click Preview assembly to retry.')+'\n'+str(message));self.load_notice.show()
     def setup_studio(self):
         # clear() removes VTK's light kit as well as actors. Reinstall lights
         # after every file load; relying on the automatic headlight flattens depth.
@@ -90,11 +112,12 @@ class SnapshotTab(W.QWidget):
             if not name.startswith('mesh_'):continue
             prop=actor.prop
             prop.style='wireframe' if self.mode=='Wireframe' else 'surface'
-            prop.opacity=0.20 if self.mode=='X-ray' else 1.0
             prop.interpolation='pbr' if rendered else 'phong'
-            part=self.parts[int(name.split('_')[-1])]
-            prop.metallic=min(part.get('metallic',.0),.65) if rendered else 0
-            prop.roughness=max(part.get('roughness',.4),.28)
+            index=int(name.split('_')[-1]);part=self.parts[index];textures=self.material_textures.get(index,{})
+            prop.color='white' if rendered and 'base_color' in textures else part['color']
+            prop.opacity=0.20 if self.mode=='X-ray' else (1. if rendered and 'base_color' in textures else part.get('opacity',1.))
+            prop.metallic=(1. if 'orm' in textures else part.get('metallic',.0)) if rendered else 0
+            prop.roughness=1. if rendered and 'orm' in textures else part.get('roughness',.4)
             prop.ambient=.16;prop.diffuse=.82;prop.specular=.28;prop.specular_power=35
             prop.lighting=self.mode!='Wireframe'
             path=self.paths.get(actor.GetAddressAsString(''),'')
@@ -127,6 +150,9 @@ class Window(W.QMainWindow):
         self.search=W.QLineEdit();self.search.setPlaceholderText('Find version, branch, file…');tip(self.search,'Highlight matching commits without hiding their ancestry.');self.search.textChanged.connect(self.filter_history);ll.addWidget(self.search)
         self.search_summary=label('','muted');self.search_summary.setWordWrap(True);self.search_summary.hide();ll.addWidget(self.search_summary)
         self.history=HistoryGraph();self.history.openRequested.connect(self.open_record);self.history.menuRequested.connect(self.history_menu);self.history.matchesChanged.connect(self.search_matches);self.search.returnPressed.connect(self.history.open_selected);ll.addWidget(self.history,1)
+        self.search_shortcuts=[]
+        for sequence,delta in [('F3',1),('Shift+F3',-1)]:
+            shortcut=QtGui.QShortcut(QtGui.QKeySequence(sequence),self);shortcut.activated.connect(lambda d=delta:self.history.navigate(d));self.search_shortcuts.append(shortcut)
         self.graph_warning=label('','muted');self.graph_warning.setWordWrap(True);self.graph_warning.hide();ll.addWidget(self.graph_warning)
         legend=label('● save   ◇ assembly    ┄ imported / composed','eyebrow');legend.setWordWrap(True);ll.addWidget(legend)
         graph_actions=W.QHBoxLayout();graph_actions.addWidget(tip(button('Branch…',self.branch_selected),'Create a new branch from the selected snapshot.'));graph_actions.addWidget(tip(button('Version…',self.name_selected),'Bookmark the selected saved state with a permanent version name.'));ll.addLayout(graph_actions)
@@ -138,12 +164,15 @@ class Window(W.QMainWindow):
         modes.addSeparator();self.edge_check=modes.addAction('Edges');self.edge_check.setCheckable(True);self.edge_check.setToolTip('Overlay polygon edges on shaded surfaces.');self.edge_check.toggled.connect(self.edges_changed)
         modes.addSeparator();modes.addAction('Frame all',lambda:self.frame(False));modes.addAction('Frame selected',lambda:self.frame(True));cl.addWidget(modes)
         file_actions=W.QToolBar();file_actions.setMovable(False)
+        self.view_menu=W.QToolButton();self.view_menu.setText('View…');self.view_menu.setPopupMode(W.QToolButton.InstantPopup);view_options=W.QMenu(self.view_menu)
+        for action in modes.actions():view_options.addAction(action)
+        self.view_menu.setMenu(view_options);self.view_menu.setToolTip('All display and framing controls, including those hidden when the window is narrow.');file_actions.addWidget(self.view_menu)
         self.export_action=file_actions.addAction('Export STL…',self.export_stl_dialog);self.export_action.setToolTip('Export the active saved tab, not the assembly draft below.')
         self.main_action=file_actions.addAction('Set as main',self.set_main);self.main_action.setToolTip('Select the assembly in the current tab as main.');cl.addWidget(file_actions)
         for toolbar in [modes,file_actions]:
             extension=toolbar.findChild(W.QToolButton,'qt_toolbar_ext_button')
             if extension:
-                extension.setIcon(QtGui.QIcon());extension.setArrowType(QtCore.Qt.NoArrow);extension.setText('⋯');extension.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly);extension.setToolTip('More controls')
+                extension.setToolTip('More controls')
         self.tabs=W.QTabWidget();self.tabs.setTabsClosable(True);self.tabs.setMovable(True);self.tabs.tabCloseRequested.connect(self.close_tab);self.tabs.currentChanged.connect(self.tab_changed);cl.addWidget(self.tabs,1)
         addbar=W.QHBoxLayout();self.selection_label=label('Open a version, then select its meshes.','muted');self.selection_label.setWordWrap(True);addbar.addWidget(self.selection_label,1);self.add_button=tip(button('+ Add selected to assembly',self.add_selection,True),'Add selected meshes or a selected subtree from the active USD tab. Original files are never changed.');addbar.addWidget(self.add_button);cl.addLayout(addbar)
         self.notice=label('1  Open a version   →   2  Select geometry   →   3  Add pieces   →   4  Save USD','eyebrow');self.notice.setWordWrap(True);cl.addWidget(self.notice);splitter.addWidget(center)
@@ -152,6 +181,7 @@ class Window(W.QMainWindow):
         self.details=W.QTextEdit();self.details.setReadOnly(True);self.details.setMinimumHeight(55);self.inspector_splitter.addWidget(self.details);self.inspector_splitter.setSizes([350,130])
         rl.addWidget(label('MATERIAL FOR ADDED PIECES','eyebrow'));self.material_combo=W.QComboBox();tip(self.material_combo,'Keep source materials, or bind a versioned project material when adding the selection.');rl.addWidget(self.material_combo)
         self.issue_label=label('Full files are versioned. Geometry is selected only when making an assembly.','muted');self.issue_label.setWordWrap(True);rl.addWidget(self.issue_label);splitter.addWidget(right);splitter.setSizes([390,750,280])
+        self.preview_notes_button=tip(button('Preview notes…',self.show_preview_notes),'Read all material, texture and geometry preview warnings.');self.preview_notes_button.hide();rl.addWidget(self.preview_notes_button)
         tray,tl=panel('NEW ASSEMBLY');self.table=W.QTableWidget(0,4);self.table.setHorizontalHeaderLabels(['SELECTED GEOMETRY','FROM FILE / VERSION','PLACEMENT (m)','MATERIAL']);self.table.horizontalHeader().setSectionResizeMode(0,W.QHeaderView.Stretch);self.table.setColumnWidth(1,230);self.table.setColumnWidth(2,150);self.table.setColumnWidth(3,180);self.table.setMinimumHeight(55);self.table.setSelectionBehavior(W.QAbstractItemView.SelectRows);self.table.setEditTriggers(W.QAbstractItemView.NoEditTriggers);tl.addWidget(self.table)
         actions=W.QHBoxLayout()
         self.remove_button=tip(button('Remove',self.remove_piece),'Remove the selected draft piece. No history is deleted.');actions.addWidget(self.remove_button)
@@ -377,7 +407,7 @@ class Window(W.QMainWindow):
         def work():
             verification=self.project.verify(r['id'])
             if not verification['ok']:raise CadgitError('Snapshot integrity check failed: '+'; '.join(verification['errors']))
-            return meshes(path),stage_info(path)
+            return meshes(path,include_textures=True),stage_info(path)
         self.job(work,done,failed)
     def close_tab(self,index):
         tab=self.tabs.widget(index)
@@ -387,7 +417,7 @@ class Window(W.QMainWindow):
         self.tabs.removeTab(index);tab.plotter.close();tab.deleteLater();self.update_actions()
     def tab_changed(self,*_):
         tab=self.current();self.scene.blockSignals(True);self.scene.clear()
-        if not tab:self.scene.blockSignals(False);self.details.clear();self.selection_label.setText('Open a version to select geometry.');self.update_actions();return
+        if not tab:self.scene.blockSignals(False);self.details.clear();self.selection_label.setText('Open a version to select geometry.');self.issue_label.setText('Open a version to inspect geometry and materials.');self.preview_notes_button.hide();self.update_actions();return
         nodes={}
         for prim in tab.info.get('prims',[]):
             parent='/'.join(prim['path'].split('/')[:-1]);item=W.QTreeWidgetItem(nodes.get(parent,self.scene),[prim['name']]);item.setData(0,QtCore.Qt.UserRole,prim['path']);item.setToolTip(0,prim['path']+'\n'+prim['type']);nodes[prim['path']]=item
@@ -398,11 +428,25 @@ class Window(W.QMainWindow):
         if tab.record:
             self.history.select_ref(tab.record['id'])
             r=tab.record;self.details.setPlainText(self.native_name(r)+'\n'+r['label']+'\nVersion '+r['id']+'\n'+r['created_at']+'\n\n'+str(len(tab.parts))+' mesh objects in this file'+('\nImported from '+r['metadata']['imported_from'] if r.get('metadata',{}).get('imported_from') else '')+'\nRight-click history → View lineage')
-        else:self.details.setPlainText('Unsaved assembly preview\n'+str(len(tab.parts))+' mesh objects\nSave assembly as USD to create a new file.')
-        unsupported=tab.info.get('unsupported_types',[])
-        self.issue_label.setText('Studio preview uses USD surface colors. Native shader graphs render in their own application.'+('\nUnsupported display: '+', '.join(unsupported) if unsupported else ''))
-        self.selection_label.setText(str(len(tab.selected))+' selection(s) in this file' if tab.selected else 'Select an object in this file. Ctrl/Cmd-click in the tree for multiple.')
+        else:self.details.setPlainText(('Outdated assembly preview — preview again to see current draft.' if getattr(tab,'preview_stale',False) else 'Unsaved assembly preview')+'\n'+str(len(tab.parts))+' mesh objects\nSave assembly as USD saves the current draft below.'+('\n'+'\n'.join(getattr(tab,'preview_notes',[])) if getattr(tab,'preview_notes',[]) else ''))
+        warnings=self.preview_notes(tab)
+        self.issue_label.setText('Rendered preview supports image maps. Native shaders use their application.')
+        self.preview_notes_button.setText('Preview notes ('+str(len(warnings))+')…');self.preview_notes_button.setVisible(bool(warnings));self.preview_notes_button.setToolTip('\n'.join(warnings))
+        if warnings:self.details.setPlainText(self.details.toPlainText()+'\n\n'+'\n'.join(warnings))
+        self.selection_label.setText(('Draft preview. Edit pieces below, then preview again.' if not tab.record else str(len(tab.selected))+' selection(s) in this file' if tab.selected else 'Select an object in this file. Ctrl/Cmd-click in the tree for multiple.'))
         self.update_actions()
+    def preview_notes(self,tab):
+        notes=[*getattr(tab,'preview_notes',[]),*(message for part in tab.parts for message in part.get('warnings',[]))]
+        unsupported=tab.info.get('unsupported_types',[])
+        if unsupported:notes.append('Unsupported display: '+', '.join(unsupported))
+        return list(dict.fromkeys(notes))
+    def show_preview_notes(self):
+        tab=self.current()
+        if not tab:return
+        dialog=W.QDialog(self);dialog.setWindowTitle('Preview notes');dialog.resize(650,400);layout=W.QVBoxLayout(dialog)
+        layout.addWidget(label(self.native_name(tab.record) if tab.record else 'Assembly draft','title'))
+        notes=W.QPlainTextEdit();notes.setReadOnly(True);notes.setPlainText('\n\n'.join(self.preview_notes(tab)));layout.addWidget(notes)
+        close=W.QDialogButtonBox(W.QDialogButtonBox.Close);close.rejected.connect(dialog.reject);layout.addWidget(close);dialog.exec()
     def mode_changed(self,mode):
         tab=self.current()
         if tab:tab.mode=mode;tab.apply_mode()
@@ -442,7 +486,20 @@ class Window(W.QMainWindow):
             choice=self.material_combo.currentData();logical=choice.get('library_material_revision') if isinstance(choice,dict) else None
             self.draft.append(Selection(snapshot_id=tab.record['id'],prim_path=path,label=path.split('/')[-1],material_revision=choice if isinstance(choice,str) else None,library_material_revision=logical).model_dump())
         self.update_tray();self.statusBar().showMessage('Added to assembly. Open another version tab to add more geometry.')
+    def draft_signature(self):return json.dumps(self.draft,sort_keys=True)
+    def mark_preview_state(self,tab):
+        if not hasattr(tab,'draft_signature'):return
+        tab.preview_stale=tab.draft_signature!=self.draft_signature()
+        index=self.tabs.indexOf(tab)
+        if index>=0:
+            self.tabs.setTabText(index,'Assembly • outdated preview' if tab.preview_stale else 'Assembly • draft')
+            self.tabs.setTabToolTip(index,'Draft changed. Preview again to update geometry and materials.' if tab.preview_stale else 'Preview of the current assembly draft')
+        if tab.load_state=='ready':
+            tab.load_notice.setText('Draft changed. Preview again to update this view. Save uses the current draft below.' if tab.preview_stale else '')
+            tab.load_notice.setVisible(tab.preview_stale)
     def update_tray(self,persist=True):
+        for index in range(self.tabs.count()):self.mark_preview_state(self.tabs.widget(index))
+        if self.current() and getattr(self.current(),'preview_stale',False):self.tab_changed()
         self.table.setRowCount(len(self.draft))
         for row,s in enumerate(self.draft):
             try:r=self.project.resolve(s['snapshot_id']);source=self.native_name(r)+' · '+r['id'][-6:]
@@ -477,16 +534,28 @@ class Window(W.QMainWindow):
             except ValueError as e:self.fail(str(e))
     def preview_draft(self):
         if not self.draft:return self.fail('Add selected geometry from a snapshot tab first.')
-        selections=json.loads(json.dumps(self.draft));tab=SnapshotTab();tab.picked.connect(self.pick_path);self.tabs.addTab(tab,'Assembly • draft');self.tabs.setCurrentWidget(tab)
+        selections=json.loads(json.dumps(self.draft));tab=SnapshotTab();tab.draft_signature=self.draft_signature();tab.preview_notes=[];tab.picked.connect(self.pick_path);self.tabs.addTab(tab,'Assembly • draft');self.tabs.setCurrentWidget(tab)
         def work():
+            from .library import Library
+            library=Library(self.project);notes=[]
             result=[];prims=[{'path':'/Draft','name':'Draft assembly','type':'Xform'}];known={'/Draft'}
             for index,s in enumerate(selections):
                 r=self.project.resolve(s['snapshot_id'])
                 verification=self.project.verify(r['id'])
                 if not verification['ok']:raise CadgitError('Snapshot integrity check failed: '+'; '.join(verification['errors']))
+                appearance=None
+                if s.get('library_material_revision'):
+                    material=library.get(s['library_material_revision']);checked=library.verify(material['id'])
+                    if not checked['ok']:raise CadgitError('Material integrity check failed: '+'; '.join(checked['errors']))
+                    appearance=material['definition'].get('appearance',{})
+                    if appearance.get('native_graph'):notes.append('Native shader graphs are saved for their application; this viewport shows USD textures and surface values.')
+                if s.get('material_revision'):notes.append('Captured shader overrides are saved for their native application. This viewport shows source surface values.')
                 prefix='/Draft/Piece_'+str(index+1)
                 prims.append({'path':prefix,'name':s.get('label','Piece')+' · '+r['id'][-6:],'type':'Xform'});known.add(prefix)
-                for part in meshes(self.project.stage_path(r),s['prim_path']):
+                override=(material,library) if s.get('library_material_revision') else None
+                for part in meshes(self.project.stage_path(r),s['prim_path'],include_textures=True,material_override=override):
+                    if appearance:
+                        preview=appearance.get('preview',{});part['color']=tuple(preview.get('base_color',[.65,.65,.65]));part['roughness']=preview.get('roughness',.4);part['metallic']=preview.get('metallic',0.)
                     source_path=part['path'];part['path']=prefix+source_path
                     part['points']=part['points']+np.array(s.get('translation',[0,0,0]));result.append(part)
                     ancestors=part['path'].split('/')
@@ -495,9 +564,10 @@ class Window(W.QMainWindow):
                         if ancestor and ancestor not in known:
                             prims.append({'path':ancestor,'name':ancestor.rsplit('/',1)[-1],'type':'Xform'});known.add(ancestor)
                     prims.append({'path':part['path'],'name':part['name'],'type':'Mesh'})
-            return result,{'prims':prims}
+            return result,{'prims':prims},list(dict.fromkeys(notes))
         def done(data):
-            if self.tab_is_open(tab):tab.display(*data);self.tab_changed();self.statusBar().showMessage('Draft preview • save the assembly to export or open it in a native application.')
+            if self.tab_is_open(tab):
+                tab.preview_notes=data[2];tab.display(data[0],data[1]);self.mark_preview_state(tab);self.tab_changed();self.statusBar().showMessage('Draft changed; preview again to update this view.' if tab.preview_stale else (' '.join(tab.preview_notes) or 'Draft preview • save the assembly to export or open it in a native application.'))
         def failed(error):
             if not self.tab_is_open(tab):return False
             tab.load_error(error)
@@ -567,7 +637,10 @@ class Window(W.QMainWindow):
         menu.addAction('Copy USD path',self.copy_current)
         menu.addSeparator()
         from .handoff import targets
-        for target in targets(self.project):menu.addAction(target['label']+'…',lambda _=False,t=target:self.open_target(t))
+        try:configured=targets(self.project)
+        except CadgitError as exc:
+            configured=[];self.statusBar().showMessage('Application targets need attention: '+str(exc)+' • open Settings to repair.')
+        for target in configured:menu.addAction(target['label']+'…',lambda _=False,t=target:self.open_target(t))
         menu.addSeparator();menu.addAction('Configure application targets…',self.settings);self.open_menu.setMenu(menu)
     def reveal_current(self):
         tab=self.current()
@@ -586,13 +659,15 @@ class Window(W.QMainWindow):
         dialog=W.QDialog(self);dialog.setWindowTitle('Project settings');dialog.resize(650,430);layout=W.QVBoxLayout(dialog)
         layout.addWidget(label('Application targets','title'));layout.addWidget(label('Built-in adapters create new native files. External commands can use {usd}.','muted'))
         from .handoff import targets
-        editor=W.QPlainTextEdit(json.dumps(targets(self.project),indent=2));layout.addWidget(editor)
+        try:configured=targets(self.project)
+        except CadgitError:configured=read_json(self.project.root/'cadgit.json').get('open_targets',[])
+        editor=W.QPlainTextEdit(json.dumps(configured,indent=2));layout.addWidget(editor)
         theme_button=button('Toggle light / dark',self.toggle_theme);layout.addWidget(theme_button)
         buttons=W.QDialogButtonBox(W.QDialogButtonBox.Save|W.QDialogButtonBox.Cancel);layout.addWidget(buttons)
         def save():
             try:
-                value=json.loads(editor.toPlainText())
-                if not isinstance(value,list) or any('label' not in x or 'kind' not in x for x in value):raise ValueError('Each target needs label and kind')
+                from .handoff import validate_targets
+                value=validate_targets(json.loads(editor.toPlainText()))
                 config=read_json(self.project.root/'cadgit.json');config['open_targets']=value;atomic_json(self.project.root/'cadgit.json',config);self.reload_open_menu();dialog.accept()
             except Exception as e:W.QMessageBox.warning(dialog,'Invalid targets',str(e))
         buttons.accepted.connect(save);buttons.rejected.connect(dialog.reject);dialog.exec()

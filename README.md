@@ -148,7 +148,7 @@ The format evolves additively: new optional parameters preserve existing IDs, me
 This is a working first prototype, not completion of every acceptance criterion
 in the [review specification](docs/SPECIFICATION.md).
 
-- Rendered preview uses three studio lights, a neutral reflection environment, USD preview surface values, ambient occlusion. It does not evaluate Cycles graphs, shader displacement, or a full USD renderer.
+- Rendered preview uses three studio lights, a neutral reflection environment, USD preview surface values and image textures, and ambient occlusion. Base color, roughness, metallic and opacity maps are supported, including packaged USDZ images and indexed UVs. Missing UVs use labeled box mapping for inspection only. It does not evaluate Cycles graphs, normal/displacement maps, or a full USD renderer.
 - Rhino capture tessellates meshes, Breps and convertible extrusions using Rhino; blocks are expanded in save captures. Unsupported geometry rejects capture. Classic Rhino materials and renderer content are not yet transferred by this capture path.
 - USD-to-Rhino handoff creates polygon meshes in millimeters, preserving object/source identifiers and known material revision slots. It does not reconstruct editable NURBS, constraints, or feature history.
 - Blender graph assets can be archived and rebound to whole objects in new Blender files. Per-face native graph restoration and general renderer interchange are unfinished. Native material evaluation belongs to its application.
@@ -161,6 +161,12 @@ in the [review specification](docs/SPECIFICATION.md).
 
 Two independent architecture and UI/UX reviews produced fixes for capture recovery, archive integrity, safe publication, project ownership, draft preservation and asynchronous UI failures. See [findings, fixes and remaining work](docs/REVIEWS_AND_HARDENING.md).
 
+A subsequent three-agent architecture, UX and QA pass fixed material identity,
+preview accuracy, settings recovery and failed exports/imports. See the
+[compiled review and validation](docs/REVIEW_2026-11-08.md).
+The [post-texture recheck](docs/REVIEW_2026-11-08_ROUND_2.md) records the next
+three-agent pass, including inherited UVs, initialization failures and preview diagnostics.
+
 ## Verification
 
 ```sh
@@ -169,9 +175,10 @@ uv run python tests/integration/cli_smoke.py
 uv run python tests/integration/ui_smoke.py
 uv run python tests/integration/ui_robustness.py
 uv run python tests/integration/material_library_smoke.py
+uv run python tests/integration/texture_preview_smoke.py
 ```
 
-The second check opens a temporary Qt/VTK project and exercises four viewport modes,
+The UI smoke check opens a temporary Qt/VTK project and exercises four viewport modes,
 two source tabs, mesh selection, assembly preview and immutable assembly creation.
 It requires a graphical session. Native integration checks and their scope are
 recorded in [V1 implementation notes](docs/V1_IMPLEMENTATION.md).

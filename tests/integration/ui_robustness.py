@@ -29,6 +29,43 @@ try:
     ui.meshes=real_meshes;window.open_record(source['id']);settle(window)
     assert window.current().load_state=='ready' and window.current().parts
 
+    # Every preview warning stays reachable after selecting geometry, without
+    # expanding a long label beyond the minimum-size inspector.
+    tab=window.current();original_warnings=list(tab.parts[0]['warnings'])
+    warning_messages=['No UV coordinates; preview uses box mapping.','Metallic texture unavailable: unreadable image.','Unsupported display fixture.']
+    tab.parts[0]['warnings']=warning_messages;window.tab_changed();window.resize(1000,640);app.processEvents()
+    assert window.preview_notes_button.isVisible() and '(3)' in window.preview_notes_button.text()
+    window.pick_path(tab.parts[0]['path']);assert window.preview_notes_button.isVisible()
+    displayed=[]
+    def inspect_notes():
+        dialog=app.activeModalWidget();displayed.append(dialog.findChild(ui.W.QPlainTextEdit).toPlainText());dialog.grab().save('/tmp/cadgit-preview-notes.png');dialog.reject()
+    ui.QtCore.QTimer.singleShot(50,inspect_notes);window.preview_notes_button.click()
+    assert displayed and all(message in displayed[0] for message in warning_messages)
+    tab.parts[0]['warnings']=original_warnings;window.tab_changed()
+
+    # The draft's portable material appearance matches the saved assembly.
+    from cadgit.library import Library
+    library=Library(project)
+    material=library.create_material('Review red',{'appearance':{'preview':{'base_color':[.9,.1,.2],'roughness':.25,'metallic':.6}}})
+    window.draft=[ui.Selection(snapshot_id=source['id'],prim_path='/Engine/Block',library_material_revision=material['id']).model_dump()]
+    window.update_tray();window.preview_draft();settle(window);material_preview=window.current()
+    saved=ui.assemble(project,window.draft,'Appearance regression')
+    expected=real_meshes(project.stage_path(saved))[0]
+    import numpy as np
+    for key in ['color','roughness','metallic']:assert np.allclose(material_preview.parts[0][key],expected[key]),key
+    # Engineering-only material records preserve the source appearance.
+    physical=library.create_material('Engineering only',{'physical':{'properties':{}},'appearance':{}})
+    window.draft[0]['library_material_revision']=physical['id'];window.update_tray();window.preview_draft();settle(window)
+    assert np.allclose(window.current().parts[0]['color'],real_meshes(project.stage_path(source),'/Engine/Block')[0]['color'])
+    window.draft[0]['library_material_revision']=material['id'];window.update_tray();window.tabs.setCurrentWidget(material_preview)
+    # A preview is a frozen view; editing the draft must make that explicit.
+    window.draft[0]['translation']=(.2,0,0);window.update_tray()
+    assert material_preview.preview_stale and material_preview.load_notice.isVisible()
+    assert 'outdated' in window.tabs.tabText(window.tabs.indexOf(material_preview))
+    assert 'Outdated' in window.details.toPlainText()
+    window.preview_draft();settle(window)
+    assert not window.current().preview_stale and not window.current().load_notice.isVisible()
+
     # Two historical meshes with identical prim paths remain independently selectable.
     sources=[r for r in project.records() if r['source']=='rhino']
     window.draft=[ui.Selection(snapshot_id=sources[0]['id'],prim_path='/Engine/Block').model_dump(),ui.Selection(snapshot_id=sources[1]['id'],prim_path='/Engine/Block',translation=(.2,0,0)).model_dump()]
@@ -66,11 +103,23 @@ try:
     graph=window.history;graph.setFocus();graph.select_ref(graph.graph['nodes'][0]['id'])
     before=graph.selected_ref;QTest.keyClick(graph,ui.QtCore.Qt.Key_Down)
     assert graph.selected_ref!=before
+    # Search navigation works while typing, without manually focusing the graph.
+    window.search.setText('study');window.search.setFocus();app.processEvents()
+    matches=graph.matched_ids();assert len(matches)>1
+    graph.select_ref(matches[0]);QTest.keyClick(window.search,ui.QtCore.Qt.Key_F3);app.processEvents()
+    assert graph.selected_ref==matches[1]
+    QTest.keyClick(window.search,ui.QtCore.Qt.Key_F3,ui.QtCore.Qt.ShiftModifier);app.processEvents()
+    assert graph.selected_ref==matches[0]
     window.search.setText('Cooling');app.processEvents()
     assert graph.selected_ref in graph.matched_ids() and window.search_summary.isVisible()
     QTest.keyClick(window.search,ui.QtCore.Qt.Key_Return);settle(window)
     assert window.current().record['id']==graph.selected_ref
     window.resize(1000,640);app.processEvents();window.grab().save('/tmp/cadgit-ui-robustness-small.png')
+    assert window.view_menu.isVisible() and window.view_menu.menu()
+    assert {'Frame all','Frame selected','Edges'} <= {action.text() for action in window.view_menu.menu().actions()}
+    window.current().parts[0]['warnings'].append('Last-tab preview warning');window.tab_changed();assert window.preview_notes_button.isVisible()
+    while window.tabs.count():window.close_tab(0)
+    assert not window.preview_notes_button.isVisible()
 
     # Window closure ignores late callbacks, while the background operation finishes.
     completed=[];window.job(lambda:(time.sleep(.1),True)[1],lambda value:completed.append(value));window.close();settle(window)
@@ -83,6 +132,11 @@ try:
     broken=project.root/'history/sources/rhino/broken';broken.mkdir(parents=True);(broken/'manifest.json').write_text('{broken record');(broken/'COMMITTED').write_text('broken')
     recovered.refresh();assert 'unreadable records' in recovered.graph_warning.text()
     assert recovered.history.graph['nodes']
+    # Old invalid application settings remain recoverable through Settings.
+    config=ui.read_json(project.root/'cadgit.json');config['open_targets']=[{'label':4,'kind':'rhino'}];ui.atomic_json(project.root/'cadgit.json',config)
+    recovered.reload_open_menu()
+    assert any('Configure application' in action.text() for action in recovered.open_menu.menu().actions())
+    assert 'need attention' in recovered.statusBar().currentMessage()
     recovered.close();app.processEvents()
     assert not unhandled,unhandled
     print('UI_ROBUSTNESS_VERIFIED: retry, unique preview selection, closed-tab/window callbacks, callback errors, graph search/keyboard, draft preservation')

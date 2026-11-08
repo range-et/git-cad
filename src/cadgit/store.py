@@ -75,15 +75,19 @@ def fsync_dir(path):
     try: os.fsync(fd)
     finally: os.close(fd)
 
+def file_digest(path):
+    """Hash large native payloads without loading their complete bytes."""
+    digest=hashlib.sha256()
+    with Path(path).open('rb') as file:
+        for block in iter(lambda:file.read(1024*1024),b''):digest.update(block)
+    return digest.hexdigest()
+
 def inventory(directory):
     result = []
     for path in sorted(Path(directory).rglob("*")):
         if path.is_symlink():raise CadgitError(f"Symlinks are not allowed inside committed records: {path}")
         if path.is_file() and path not in {Path(directory)/"manifest.json",Path(directory)/"COMMITTED"}:
-            h = hashlib.sha256()
-            with path.open("rb") as f:
-                for block in iter(lambda: f.read(1024 * 1024), b""): h.update(block)
-            result.append({"path": str(path.relative_to(directory)), "sha256": h.hexdigest(), "bytes": path.stat().st_size})
+            result.append({"path": str(path.relative_to(directory)), "sha256": file_digest(path), "bytes": path.stat().st_size})
     return result
 
 class Project:
@@ -104,32 +108,62 @@ class Project:
         reserved=['library','history','assemblies','materials','artifacts','main','.cadgit','mcp.example.json']
         conflicts=[str(root/name) for name in reserved if (root/name).exists() or (root/name).is_symlink()]
         if conflicts:raise CadgitError('Initialization would conflict with existing paths: '+', '.join(conflicts)+'. Choose an empty project subfolder.')
+        source=root/'source'
+        source_exists=source.exists() or source.is_symlink()
+        if source_exists and not source.is_dir():raise CadgitError('Initialization requires source/ to be a directory: '+str(source))
+        # Read and validate user-owned Git rules before publishing any project
+        # state. Keep their exact bytes for both appending and failure rollback.
+        rules={}
+        for filename,section in [('.gitignore','# CAD-GIT runtime only; history is durable\n.cadgit/\n*.blend1\n*.blend2\n*.3dmbak\n.DS_Store\n'),('.gitattributes','# CAD-GIT native binary formats\n*.3dm binary\n*.blend binary\n*.usdc binary\n*.usdz binary\n')]:
+            file=root/filename;before=None
+            if file.exists() or file.is_symlink():
+                if file.is_symlink() or not file.is_file():raise CadgitError('Initialization requires a regular Git rules file: '+str(file))
+                try:before=file.read_bytes();current=before.decode('utf-8')
+                except (OSError,UnicodeError) as exc:raise CadgitError('Cannot read Git rules '+str(file)+': '+str(exc)) from exc
+            else:current=''
+            if '# CAD-GIT' not in current:rules[filename]=(before,(before or b'')+(b'\n' if before else b'')+section.encode())
         import tempfile
         with tempfile.TemporaryDirectory(prefix='.cadgit-init-',dir=root) as temporary:
             prepared=Path(temporary)
             for directory in ['history/events','history/sources','assemblies','materials','artifacts/prints','main','.cadgit/staging','.cadgit/inbox','.cadgit/logs']:(prepared/directory).mkdir(parents=True,exist_ok=True)
+            if not source_exists:(prepared/'source').mkdir()
             from pxr import Usd,UsdGeom
             stage=Usd.Stage.CreateNew(str(prepared/'main/empty.usda'));world=UsdGeom.Xform.Define(stage,'/World');stage.SetDefaultPrim(world.GetPrim())
             UsdGeom.SetStageUpAxis(stage,'Z');UsdGeom.SetStageMetersPerUnit(stage,1.0);stage.GetRootLayer().Save();del stage
             atomic_write(prepared/'main/scene.usda',b'#usda 1.0\n( upAxis = "Z"\n metersPerUnit = 1\n defaultPrim = "World"\n subLayers = [@./empty.usda@] )\n')
             atomic_json(prepared/'mcp.example.json',{'mcpServers':{'cad-git':{'command':sys.executable,'args':['-m','cadgit.cli','--project',str(root),'mcp']}}})
-            published=[]
+            config={'schema_version':1,'schema_minor':0,'required_features':[],'extensions':{},'id':uid('project'),'name':name or root.name,'sources':['rhino','blender'],'material_policy':'native_asset_with_portable_fallback'}
+            event_id=now().replace(':','-')+'_'+uid('evt')
+            atomic_json(prepared/'history/events'/(event_id+'.json'),{'schema_version':1,'id':event_id,'created_at':now(),'kind':'project_initialized','data':{'project_id':config['id']}})
+            published=[];changed_rules=[]
             try:
                 for item in prepared.iterdir():
-                    if (root/item.name).exists():raise CadgitError('Initialization path appeared concurrently: '+str(root/item.name))
+                    if (root/item.name).exists() or (root/item.name).is_symlink():raise CadgitError('Initialization path appeared concurrently: '+str(root/item.name))
                     os.rename(item,root/item.name);published.append(root/item.name)
+                for filename,(before,after) in rules.items():
+                    file=root/filename
+                    if before is not None and (file.is_symlink() or not file.is_file() or file.read_bytes()!=before):raise CadgitError('Git rules changed during initialization: '+str(file))
+                    changed_rules.append(filename)
+                    atomic_write(file,after,replace=before is not None)
                 # The config is the init commit marker and is published last.
-                atomic_json(root/'cadgit.json',{'schema_version':1,'schema_minor':0,'required_features':[],'extensions':{},'id':uid('project'),'name':name or root.name,'sources':['rhino','blender'],'material_policy':'native_asset_with_portable_fallback'},replace=False)
+                atomic_json(root/'cadgit.json',config,replace=False)
             except Exception:
+                # A post-publication fsync can fail after the config appeared.
+                # Remove only our own commit marker, never a concurrent project.
+                try:
+                    if (root/'cadgit.json').is_file() and read_json(root/'cadgit.json').get('id')==config['id']:(root/'cadgit.json').unlink()
+                except (OSError,CadgitError):pass
+                for filename in reversed(changed_rules):
+                    file=root/filename;before,after=rules[filename]
+                    # Do not undo another writer's edits or a competing file.
+                    if file.is_file() and not file.is_symlink() and file.read_bytes()==after:
+                        if before is None:file.unlink()
+                        else:atomic_write(file,before)
                 for item in reversed(published):
                     if item.is_dir():shutil.rmtree(item)
                     else:item.unlink(missing_ok=True)
                 raise
-        (root/'source').mkdir(exist_ok=True)
-        for filename,section in [('.gitignore','# CAD-GIT runtime only; history is durable\n.cadgit/\n*.blend1\n*.blend2\n*.3dmbak\n.DS_Store\n'),('.gitattributes','# CAD-GIT native binary formats\n*.3dm binary\n*.blend binary\n*.usdc binary\n*.usdz binary\n')]:
-            file=root/filename;current=file.read_text() if file.exists() else ''
-            if '# CAD-GIT' not in current:atomic_write(file,(current+('\n' if current else '')+section).encode())
-        project=cls(root);project.event('project_initialized',{'project_id':project.config['id']});return project
+        return cls(root)
 
     @contextlib.contextmanager
     def lock(self):
@@ -411,7 +445,9 @@ class Project:
             if not relative or Path(relative).is_absolute() or '..' in Path(relative).parts or not path.is_relative_to(base):errors.append('Unsafe path: '+relative);continue
             if relative in listed:errors.append('Duplicate inventory path: '+relative)
             listed.add(relative)
-            if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest()!=file.get('sha256'):errors.append('Hash mismatch: '+relative)
+            try:
+                if not path.is_file() or file_digest(path)!=file.get('sha256'):errors.append('Hash mismatch: '+relative)
+            except OSError as exc:errors.append('Cannot read archived payload '+relative+': '+str(exc))
         images=record.get('images',{})
         if not isinstance(images,dict):errors.append('Invalid image inventory mapping')
         else:

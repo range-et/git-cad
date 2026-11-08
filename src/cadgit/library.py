@@ -26,7 +26,9 @@ def reference(value):
 
 
 def web_url(value):
-    parsed=urlparse(value)
+    if not isinstance(value,str):return False
+    try:parsed=urlparse(value)
+    except ValueError:return False
     return parsed.scheme in {'http','https'} and bool(parsed.netloc)
 
 
@@ -123,7 +125,12 @@ class Library:
         return self._require(expected_revision)
     def _provenance(self,base,value):
         result=copy.deepcopy(base.get('provenance',{}) if base else {})
-        if value:
+        if not isinstance(result,dict) or (value is not None and not isinstance(value,dict)):
+            raise CadgitError('Asset provenance must be an object')
+        for provenance in [result,value or {}]:
+            if 'license' in provenance and not isinstance(provenance['license'],dict):
+                raise CadgitError('Asset license must be an object with name and optional URL fields')
+        if value is not None:
             for key,item in value.items():
                 if key=='license' and isinstance(item,dict):result[key]={**result.get(key,{}),**item}
                 else:result[key]=item
@@ -145,17 +152,22 @@ class Library:
             record={k:copy.deepcopy(v) for k,v in (base or {}).items() if not k.startswith('_')}
             record.update(schema_version=1,required_features=list(dict.fromkeys([*(base or {}).get('required_features',[]),FEATURE])),id=revision,asset_id=identity,kind=kind,revision_number=(base['revision_number']+1 if base else 1),label=label or (base or {}).get('label') or 'Untitled asset',created_at=now(),parents=links,dependencies=copy.deepcopy(dependencies or []),provenance=self._provenance(base,provenance),definition=copy.deepcopy(definition if definition is not None else (base or {}).get('definition',{})),tags=copy.deepcopy(tags if tags is not None else (base or {}).get('tags',[])),change_note=note)
             staging=self.project.root/'.cadgit/staging'/revision;staging.mkdir()
-            if file:
-                source=Path(file).expanduser().resolve()
-                if not source.is_file():raise CadgitError('Missing asset file: '+str(source))
-                target=staging/'payload'/source.name;target.parent.mkdir();shutil.copy2(source,target)
-                record['entry_layer']=str(target.relative_to(staging));record['provenance']['import_path']=str(source)
-            else:
-                record['entry_layer']='definition.json';atomic_json(staging/'definition.json',record['definition'])
             try:
-                json.dumps(record,allow_nan=False);AssetRevision.model_validate(record)
-            except (TypeError,ValueError) as exc:raise CadgitError('Invalid asset revision: '+str(exc)) from exc
-            return self.project.commit(staging,self.root/'revisions'/revision,record)
+                if file:
+                    source=Path(file).expanduser().resolve()
+                    if not source.is_file():raise CadgitError('Missing asset file: '+str(source))
+                    target=staging/'payload'/source.name;target.parent.mkdir();shutil.copy2(source,target)
+                    record['entry_layer']=str(target.relative_to(staging));record['provenance']['import_path']=str(source)
+                else:
+                    record['entry_layer']='definition.json';atomic_json(staging/'definition.json',record['definition'])
+                try:
+                    json.dumps(record,allow_nan=False);AssetRevision.model_validate(record)
+                except (TypeError,ValueError) as exc:raise CadgitError('Invalid asset revision: '+str(exc)) from exc
+                return self.project.commit(staging,self.root/'revisions'/revision,record)
+            finally:
+                # Library imports are copies of user-owned files. Failed attempts
+                # can discard their partial copy; native capture recovery is separate.
+                if staging.exists():shutil.rmtree(staging)
     def import_asset(self,file,label=None,kind=None,asset_id=None,expected_revision=None,parents=None,provenance=None,tags=None,note=''):
         file=Path(file).expanduser().resolve();kind=kind or infer_kind(file)
         if kind not in KINDS-{'material','texture_set'}:raise CadgitError('Import files as image, document, shader or other')

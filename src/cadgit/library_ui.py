@@ -27,6 +27,24 @@ def display_value(value):
     return json.dumps(value,ensure_ascii=False) if isinstance(value,(dict,list)) else str(value)
 
 
+class PreviewLabel(W.QLabel):
+    """Keep an image fully visible when the inspector is resized."""
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs);self._image=None
+    def clear(self):
+        self._image=None;super().clear()
+    def setText(self,text):
+        self._image=None;super().setText(text)
+    def setPixmap(self,pixmap):
+        self._image=pixmap;self.fit_image()
+    def fit_image(self):
+        if self._image is not None:
+            size=self.contentsRect().size()
+            if size.width()>0 and size.height()>0:super().setPixmap(self._image.scaled(size,QtCore.Qt.KeepAspectRatio,QtCore.Qt.SmoothTransformation))
+    def resizeEvent(self,event):
+        super().resizeEvent(event);self.fit_image()
+
+
 class ProvenanceForm(W.QWidget):
     def __init__(self,data=None):
         super().__init__();self.base=copy.deepcopy(data or {});layout=W.QFormLayout(self);self.fields={}
@@ -162,7 +180,7 @@ class LibraryWidget(W.QWidget):
         hint=W.QLabel('Images and documents have their own histories. Materials pin exact revisions.');hint.setWordWrap(True);fl.addWidget(hint);filters.setMinimumWidth(160);splitter.addWidget(filters)
         center=W.QWidget();cl=W.QVBoxLayout(center);self.count=W.QLabel();cl.addWidget(self.count);self.grid=W.QListWidget();self.grid.setViewMode(W.QListView.IconMode);self.grid.setResizeMode(W.QListView.Adjust);self.grid.setMovement(W.QListView.Static);self.grid.setIconSize(QtCore.QSize(112,96));self.grid.setGridSize(QtCore.QSize(205,160));self.grid.setWordWrap(True);self.grid.currentItemChanged.connect(self.selected);cl.addWidget(self.grid,1);splitter.addWidget(center)
         right=W.QWidget();rl=W.QVBoxLayout(right);self.title=W.QLabel('Select a material or asset');self.title.setWordWrap(True);self.title.setTextFormat(QtCore.Qt.PlainText);rl.addWidget(self.title);self.revisions=W.QComboBox();self.revisions.currentIndexChanged.connect(self.revision_selected);rl.addWidget(self.revisions)
-        self.preview=W.QLabel('Import images, graphs and specifications, or create a material.');self.preview.setTextFormat(QtCore.Qt.PlainText);self.preview.setAlignment(QtCore.Qt.AlignCenter);self.preview.setWordWrap(True);self.preview.setMinimumHeight(130);rl.addWidget(self.preview)
+        self.preview=PreviewLabel('Import images, graphs and specifications, or create a material.');self.preview.setTextFormat(QtCore.Qt.PlainText);self.preview.setAlignment(QtCore.Qt.AlignCenter);self.preview.setWordWrap(True);self.preview.setMinimumHeight(80);rl.addWidget(self.preview)
         self.inspector=W.QTabWidget();self.details=W.QTextBrowser();self.history=W.QTreeWidget();self.history.setHeaderLabels(['Revision / relationship','ID']);self.history.itemDoubleClicked.connect(self.follow_link);self.source=W.QTextBrowser();self.inspector.addTab(self.details,'Properties / assets');self.inspector.addTab(self.history,'History / lineage');self.inspector.addTab(self.source,'Source / license');rl.addWidget(self.inspector,1)
         row=W.QHBoxLayout();self.revise_button=button('New revision…',self.new_revision);row.addWidget(self.revise_button);self.derive_button=button('Derive…',self.derive);row.addWidget(self.derive_button);rl.addLayout(row)
         row=W.QHBoxLayout();self.recombine_button=button('Recombine…',self.recombine);row.addWidget(self.recombine_button);self.use_button=button('Use for new pieces',self.use_material);row.addWidget(self.use_button);rl.addLayout(row)
@@ -188,7 +206,29 @@ class LibraryWidget(W.QWidget):
     def search_changed(self,*_):
         self.clear_selection();self.search_timer.start(180)
     def indexed(self,revision):return self._index.get(revision) or self.library.get(revision)
-    def thumbnail(self,record,size=QtCore.QSize(112,96)):
+    def thumbnail(self,record,size=QtCore.QSize(112,96),material_swatch=False):
+        appearance=record.get('definition',{}).get('appearance',{}) if record['kind']=='material' else {}
+        if appearance.get('maps',{}).get('base_color'):
+            try:
+                image=self.indexed(reference(appearance['maps']['base_color']))
+                if image['kind']=='image':
+                    thumbnail=self.thumbnail(image,size)
+                    if thumbnail:return thumbnail
+            except (OSError,CadgitError):pass
+        if record['kind']=='material' and material_swatch:
+            # A swatch describes the authored portable color, not a native render.
+            color=record.get('definition',{}).get('appearance',{}).get('preview',{}).get('base_color')
+            pixmap=QtGui.QPixmap(size);pixmap.fill(QtCore.Qt.transparent)
+            painter=QtGui.QPainter(pixmap);painter.setRenderHint(QtGui.QPainter.Antialiasing)
+            rect=QtCore.QRectF(8,4,size.width()-16,size.height()-8)
+            painter.setPen(QtGui.QPen(QtGui.QColor('#83909C'),1))
+            painter.setBrush(QtGui.QColor.fromRgbF(*color) if color else QtGui.QColor('#303943'))
+            painter.drawRoundedRect(rect,8,8)
+            if not color:
+                painter.setPen(QtGui.QColor('#DFE5EA'))
+                text='Texture\nmaterial' if appearance.get('maps') else 'Native\ngraph' if appearance.get('native_graph') else 'Surface\nappearance' if appearance.get('preview') else 'No color\npreview'
+                painter.drawText(rect,QtCore.Qt.AlignCenter,text)
+            painter.end();return pixmap
         if record['kind']!='image':return None
         try:
             path=self.project.stage_path(record);stat=path.stat();key=(record['id'],tuple((f['path'],f['sha256']) for f in record['files']),stat.st_mtime_ns,stat.st_size,size.width(),size.height())
@@ -197,7 +237,7 @@ class LibraryWidget(W.QWidget):
             reader=QtGui.QImageReader(str(path));dimensions=reader.size()
             if dimensions.width()<=0 or dimensions.height()<=0 or dimensions.width()*dimensions.height()>40_000_000:return None
             if not self.project.verify(record)['ok']:return None
-            reader.setScaledSize(dimensions.scaled(size,QtCore.Qt.KeepAspectRatio));image=reader.read();result=QtGui.QPixmap.fromImage(image) if not image.isNull() else None;self._thumbnails[key]=result
+            scaled=dimensions.scaled(size,QtCore.Qt.KeepAspectRatio);reader.setScaledSize(QtCore.QSize(max(1,scaled.width()),max(1,scaled.height())));image=reader.read();result=QtGui.QPixmap.fromImage(image) if not image.isNull() else None;self._thumbnails[key]=result
             return result
         except (OSError,CadgitError):return None
     def refresh(self,*_,reload=True):
@@ -211,7 +251,7 @@ class LibraryWidget(W.QWidget):
             if kind=='legacy':items=[item for item in items if item['legacy']]
             self.grid.blockSignals(True);self.grid.clear()
             for summary in items:
-                record=self.indexed(summary['head']);item=W.QListWidgetItem(summary['label']+'\n'+summary['kind'].title()+' • r'+str(record['revision_number'])+' • '+str(summary['revision_count'])+' version(s)'+(' • captured' if summary['legacy'] else ''));item.setData(QtCore.Qt.UserRole,record['asset_id']);item.setToolTip(record['id']+'\n'+str(len(summary['heads']))+' head(s)');image=self.thumbnail(record)
+                record=self.indexed(summary['head']);item=W.QListWidgetItem(summary['label']+'\n'+summary['kind'].title()+' • r'+str(record['revision_number'])+' • '+str(summary['revision_count'])+' version(s)'+(' • captured' if summary['legacy'] else ''));item.setData(QtCore.Qt.UserRole,record['asset_id']);item.setToolTip(record['id']+'\n'+str(len(summary['heads']))+' head(s)'+('\nBase-color image or authored swatch; native appearance may differ.' if record['kind']=='material' else ''));image=self.thumbnail(record,material_swatch=True)
                 if image:item.setIcon(QtGui.QIcon(image))
                 else:item.setIcon(self.style().standardIcon(W.QStyle.SP_DirIcon if record['kind']=='material' else W.QStyle.SP_FileIcon))
                 self.grid.addItem(item)
@@ -244,14 +284,16 @@ class LibraryWidget(W.QWidget):
             checked=self.library.verify(ref)
             if not checked['ok']:
                 self.preview.clear();self.details.setPlainText('Integrity error: '+'; '.join(checked['errors']));self.actions();return
-            self._valid_selection=True;self.title.setText(r['label']+' • r'+str(r['revision_number'])+'\n'+r['id']);self.preview.clear();self.preview.setStyleSheet('')
+            self._valid_selection=True;self.title.setText(r['label']+' • r'+str(r['revision_number'])+'\n'+r['id']);self.preview.clear();self.preview.setStyleSheet('');self.preview.setToolTip('')
             image=self.thumbnail(r,QtCore.QSize(380,220))
-            if image:self.preview.setPixmap(image)
+            if image:
+                self.preview.setPixmap(image)
+                if r['kind']=='material':self.preview.setToolTip('Pinned base-color image. Rendered preview applies UV mapping and surface properties.')
             elif r['kind']=='material':
                 appearance=r['definition'].get('appearance',{});color=appearance.get('preview',{}).get('base_color')
                 if color:
                     qcolor=QtGui.QColor.fromRgbF(*color);text='#17202A' if qcolor.lightnessF()>.55 else '#FFFFFF';self.preview.setStyleSheet('background:'+qcolor.name()+';color:'+text+';padding:12px;')
-                self.preview.setText('Portable color preview\nNative graphs render in their application' if color else 'Native graph attached • preview in its compatible application' if appearance.get('native_graph') else 'Physical-only / no portable preview\nNo engineering properties are inferred')
+                self.preview.setText('Portable color preview\nNative graphs render in their application' if color else 'Texture material\nBase-color image preview unavailable' if appearance.get('maps',{}).get('base_color') else 'Texture material\nInspect map roles in Properties / assets' if appearance.get('maps') else 'Native graph attached • preview in its compatible application' if appearance.get('native_graph') else 'Portable surface appearance\nNo base-color swatch' if appearance.get('preview') else 'Physical-only / no portable preview\nNo engineering properties are inferred')
             else:self.preview.setText(r['kind'].title()+' asset\n'+('Captured native shader' if r.get('legacy') else Path(r['entry_layer']).name)+'\nPreview unavailable or not supported')
             import html
             definition=r.get('definition',{});body=[]
