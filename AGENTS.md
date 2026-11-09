@@ -1,4 +1,4 @@
-# CAD-GIT engineering workflow
+# Git CAD engineering workflow
 
 Read [docs/BUILD_GATES.md](docs/BUILD_GATES.md) before implementation or release.
 The CLI, UI and optional MCP share a local immutable history model. Preserve
@@ -7,28 +7,35 @@ meaning. Use temporary projects for tests; never fabricate historical records.
 
 ## Tracking documents and document hygiene
 
-Read [features.md](features.md) and [issues.md](issues.md) before planning changes.
-Use features.md for implemented capabilities and dated completion history;
-issues.md is the single open-work ledger for bugs, investigations and future ideas.
-Detailed designs, experiments and review evidence stay in docs/ and are linked
-from the ledgers. The specification records intent, not proof of implementation.
+Read [features.md](features.md) and the relevant [GitHub Issues](https://github.com/range-et/git-cad/issues) before planning changes.
+GitHub Issues is the sole authoritative tracker for open bugs, investigations,
+roadmap ideas, priorities, status and next actions. Do not recreate issues.md or
+maintain another local backlog. Use features.md for implemented capabilities and
+dated completion history. Detailed designs, experiments and review evidence stay
+in docs/ and are linked from GitHub issues and completion entries. The
+specification records intent, not proof of implementation.
 
-- Before work, find or add the relevant stable issue ID, status and next action.
-  Distinguish reproduced defects from hypotheses, roadmap ideas and deferred scope.
-  Include evidence/reproduction and an observable completion criterion.
-- After work, update affected ledger entries and user-facing instructions in the
-  same change. Record limitations, test commands/results, source revision or local
-  working-tree scope, and hardware/runtime where relevant. Do not claim planned,
+- Before work, search GitHub Issues for an existing item; create one if needed.
+  Triage its status, priority, scope and next action. Distinguish reproduced defects
+  from hypotheses, roadmap ideas and deferred scope. Include evidence/reproduction
+  and observable acceptance criteria; avoid duplicates.
+- Implement the issue's agreed scope and run the applicable checks and independent
+  reviews. Update its GitHub status and evidence as work progresses. Partial fixes
+  keep a narrowly scoped issue open and link completed work and remaining actions.
+- Once the work is verified, add the implemented outcome to features.md History,
+  linking the GitHub issue, implementation commit/PR and detailed evidence. Record
+  limitations, test commands/results, source revision or local working-tree scope,
+  and hardware/runtime where relevant. Then close the GitHub issue with completion
+  evidence. Do not close an issue just because a handler test or partial fix passed.
+- Update user-facing instructions in the same change. Do not claim planned,
   unpublished or separately tested backend work is an available product feature.
-- Close verified items by moving their outcome to features.md History, preserving
-  the issue ID and evidence link. Remove closed entries from issues.md; never reuse
-  IDs. Partial fixes keep a narrowly scoped open entry and link completed work.
-- Keep one authoritative status per item. Link to detailed design notes instead
-  of duplicating backlogs; preserve historical reports as dated evidence. Update
-  stale README/portbook/setup descriptions when supported behavior changes.
+  Keep one authoritative open-work status on GitHub; link detailed design notes
+  rather than duplicating backlogs. Preserve historical reports as dated evidence.
 - Before handoff, check changed Markdown links and git diff whitespace, reconcile
   counts/claims with actual evidence, and state pending gates. Do not put large
-  generated artifacts, model weights or machine-only logs in these ledgers.
+  generated artifacts, model weights or machine-only logs in tracking documents.
+- Use GitHub issue URLs/numbers for new references. Historical ledger IDs are
+  distinct and remain traceable through [the migration map](docs/ISSUE_MIGRATION.md).
 
 ## User-workflow test coverage
 

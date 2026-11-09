@@ -1,5 +1,9 @@
 # Entire-project verification campaign — 2026-11-09
 
+Historical unlinked issue numbers in this record are former local ledger IDs,
+not GitHub issue numbers. See the [migration map](ISSUE_MIGRATION.md); completed
+pre-migration items remain recorded in [features history](../features.md).
+
 Status: fixes and verification in progress. Not a validated candidate.
 
 ## Scope and acceptance
@@ -75,7 +79,7 @@ recorded below. Real Qt tests and mocked native hook tests do not qualify native
 
 Earlier scoped compatibility results remain in
 [the prior review](REVIEW_TEST_VERIFICATION.md); current open status is authoritative
-in [issues.md](../issues.md). Do not use this progress record as release approval.
+in [GitHub Issues](https://github.com/range-et/git-cad/issues). Do not use this progress record as release approval.
 
 ## Follow-up recovery and native evidence
 

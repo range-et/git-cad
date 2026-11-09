@@ -21,8 +21,9 @@ AI agents are optional, and all required work happens locally through CLI/UI.
 ## Project tracking
 
 [features.md](features.md) lists implemented capabilities and completion history.
-[issues.md](issues.md) tracks open defects, investigations and future ideas.
-[AGENTS.md](AGENTS.md) defines how these documents stay current with the code.
+[GitHub Issues](https://github.com/range-et/git-cad/issues) tracks open defects, investigations and future ideas.
+[AGENTS.md](AGENTS.md) defines the workflow: triage on GitHub, implement and verify,
+record completed work in features.md, then close the issue with evidence.
 
 ## Run V1
 
@@ -223,7 +224,7 @@ two source tabs, mesh selection, assembly preview and immutable assembly creatio
 It requires a graphical session. Native integration checks and their scope are
 recorded in [V1 implementation notes](docs/V1_IMPLEMENTATION.md).
 
-Open work and deferred ideas are tracked in [issues.md](issues.md). The [native editability design note](docs/FUTURE_FEATURES_AND_OPEN_QUESTIONS.md) preserves background on application round trips; it is not a second backlog.
+Open work and deferred ideas are tracked in [GitHub Issues](https://github.com/range-et/git-cad/issues). The [native editability design note](docs/FUTURE_FEATURES_AND_OPEN_QUESTIONS.md) preserves background on application round trips; it is not a second backlog.
 
 See also the [historical OpenUSD/Rust assessment](docs/USD_ARCHITECTURE.md),
 [related asset managers](docs/RELATED_SYSTEMS.md), and

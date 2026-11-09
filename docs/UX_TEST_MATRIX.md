@@ -187,7 +187,7 @@ Before claiming completion, reconcile each row with the actual final report:
 passed, failed, partial or not run; include command/test name and reviewed source
 fingerprint. Unmapped rows remain open coverage gaps, not blanket release blockers
 or requests for new product features. New proven defects belong in
-[issues.md](../issues.md); implemented test capabilities belong in
+[GitHub Issues](https://github.com/range-et/git-cad/issues); implemented test capabilities belong in
 [features.md](../features.md). Follow [build gates](BUILD_GATES.md).
 
 ## Test-process shutdown regression (#14)
@@ -207,7 +207,7 @@ presentation; STL/B-rep completion warnings; B-rep failed-save/retry clearing th
 old warning; and handoff output/lineage preservation with both sync and launch
 failure messages. The latter uses a real USD package and injected launch failure,
 not a running native modeling application. Original histories are reverified
-before explicit Qt/worker cleanup. Whole-project coverage work remains #16.
+before explicit Qt/worker cleanup. Whole-project coverage work remains [GitHub #15](https://github.com/range-et/git-cad/issues/15).
 
 ### Legacy window regression coverage
 

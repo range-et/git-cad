@@ -1,7 +1,7 @@
 # Features and implementation history
 
 Inventory of implemented capabilities, with limits and evidence. Last reviewed:
-**2026-11-09**. [issues.md](issues.md) owns all open bugs and future work.
+**2026-11-09**. [GitHub Issues](https://github.com/range-et/git-cad/issues) owns all open bugs and future work.
 This is a prototype capability inventory, not a claim that the entire
 [specification](docs/SPECIFICATION.md) has shipped.
 
@@ -37,6 +37,36 @@ imply that deferred native/manual release gates have passed.
   qualification are separate from local checks. [Gates](docs/BUILD_GATES.md).
 
 ## History
+
+Older entries retain former local ledger IDs; they are not GitHub issue numbers.
+Use the [migration map](docs/ISSUE_MIGRATION.md) for imported open items and explicit
+GitHub links for current work.
+
+### 2026-11-09 — GitHub becomes the open-work tracker ([#30](https://github.com/range-et/git-cad/issues/30))
+
+All 28 former open ledger entries are tracked in GitHub issues #2–#29, retaining
+scope, priority, acceptance criteria and cross-references. GitHub is now the sole
+open-work authority; the local issues.md file is retired. AGENTS.md requires
+GitHub triage, implementation and verification, a linked features.md completion
+entry, then issue closure with evidence. Imported GitHub bodies and current docs
+follow that policy. [Historical ID map](docs/ISSUE_MIGRATION.md).
+
+Implementation scope: repository workflow/documentation changes and removal
+of the retired file from mutation-runner inputs. Validation: 47 affected campaign
+tests passed (`uv run pytest -q tests/test_verification_campaign.py
+tests/test_verification_campaign_cache.py tests/test_verification_campaign_runtime.py`);
+Ruff, whitespace, Markdown links and all 28 remote issue-policy updates verified.
+This migration is not a product release or completion of the still-open
+coverage/native roadmap.
+
+
+### 2026-11-09 — Open-work ledger linked to GitHub
+
+Created 28 GitHub issues from the former local ledger,
+including deferred/provider work and implemented fixes awaiting final review.
+Statuses, scoped priorities, evidence and acceptance criteria were retained;
+GitHub cross-references point to the corresponding imported issues. Stable ledger
+IDs remain distinct from GitHub numbers. [GitHub backlog](https://github.com/range-et/git-cad/issues).
 
 ### 2026-11-09 — PR #1 publication warnings and skill mutation identity (#40, #41)
 
@@ -77,8 +107,8 @@ suites, MCP and scoped compatibility mutations passed. [Evidence](docs/REVIEW_FU
   after asynchronous loads and rejects stale preview completions. Real Qt/VTK
   regression and independent handler rechecks passed.
 
-Whole-project line/mutation completion remains #16; intermittent GUI investigation
-remains #39. These results do not qualify live Rhino or constitute publication.
+Whole-project line/mutation completion remains [#15](https://github.com/range-et/git-cad/issues/15); intermittent GUI investigation
+remains [#29](https://github.com/range-et/git-cad/issues/29). These results do not qualify live Rhino or constitute publication.
 
 ### 2026-11-09 — Git CAD naming alignment (#37)
 
@@ -142,8 +172,9 @@ are not Git CAD release gates. See [scope contract](docs/DUALBREP.md).
 
 ### 2026-11-09 — Tracking documents and CUDA evidence
 
-Added issues/features ledgers and document-maintenance rules. Future ideas retain
-stable IDs in issues.md; completed outcomes move here with evidence. The former
+Originally added issues/features ledgers and document-maintenance rules. The local
+open-work ledger was subsequently retired in favor of GitHub Issues (see migration
+entry above); this entry preserves the original historical context. The former
 future-features document remains a linked design note, not a second backlog.
 
 Upstream DualBrep was exercised separately on C110P (RTX 5070 Ti): CUDA operations,

@@ -18,7 +18,7 @@ independent humans or, when working through an agent, delegated subagents.
 
 ## Working sequence
 
-1. Read features.md and issues.md; identify the relevant open-work entry. Define scope and observable acceptance criteria. Name data invariants and
+1. Read features.md and GitHub Issues; find or create and triage the relevant issue. Define scope and observable acceptance criteria. Name data invariants and
    compatibility risks. Use an existing project only for read-only investigation;
    create temporary projects for mutation/failure probes.
 2. For a new cross-cutting feature, ask architecture and UX reviewers to scope
@@ -37,7 +37,7 @@ independent humans or, when working through an agent, delegated subagents.
 6. Fix blockers and request a recheck from the reviewer who raised them. Run the
    impacted checks on the final code. A reviewer saying “no findings” is scoped
    evidence, not universal certification.
-7. Reconcile issues.md, features.md and affected user documentation under the
+7. Update the GitHub issue, features.md and affected user documentation under the
    document-hygiene rules in AGENTS.md; validate changed links and claims.
    Attach the completed review record. A candidate is ready only when applicable
    automated/manual gates passed and no known P0/P1 remains. Skipped/unavailable
