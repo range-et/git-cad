@@ -145,3 +145,28 @@ remain available through the CLI. Library operations additionally expose
 Use these for first-class logical materials/assets rather than treating
 `list_materials` (legacy captured shaders) as the full project library. AI client's MCP access and native-app listeners
 are separate connections.
+
+## Optional B-rep preparation
+
+`cad-git -p PROJECT brep prepare REF [--select /Prim]` creates a committed input
+bundle under `artifacts/brep_jobs/`. `brep list/show/verify` inspect these jobs.
+`brep doctor --python BACKEND_PYTHON --checkout DUALBREP` probes an external optional
+runtime; launch environment variables `CADGIT_DUALBREP_PYTHON` and
+`CADGIT_DUALBREP_CHECKOUT` also work. No models are downloaded.
+
+Preparation is not conversion: no STEP/NURBS result exists yet, and
+`execution_available` is false in this release. CUDA prerequisite readiness is
+not end-to-end validation. Never claim Metal/CPU support from PyTorch availability
+alone. Preserve job units and inverse normalization; do not import upstream's
+normalized output as millimeters. Disconnected meshes require explicit
+`--split-components`; nested shells may represent cavities. Subdivision base-mesh
+preparation requires `--allow-base-mesh`. Do not auto-enable these flags to bypass
+a modeling decision. See the repository's `docs/DUALBREP.md` for the future runtime
+and qualification contract. Ordinary Rhino handoff still produces meshes.
+
+### Print artifact verification
+
+`verify` also accepts the exact `print_…` artifact ID returned by STL export.
+Print artifacts are not scene references for composition, native handoff or main.
+Abbreviated artifact IDs are not supported. Verification checks archived bytes and
+metadata; it does not certify printability or native renderer fidelity.

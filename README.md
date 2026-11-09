@@ -18,6 +18,12 @@ saved assembly. Native applications can import that result and continue working;
 CAD-GIT does not automatically rewrite or synchronize their native documents.
 AI agents are optional, and all required work happens locally through CLI/UI.
 
+## Project tracking
+
+[features.md](features.md) lists implemented capabilities and completion history.
+[issues.md](issues.md) tracks open defects, investigations and future ideas.
+[AGENTS.md](AGENTS.md) defines how these documents stay current with the code.
+
 ## Run V1
 
 ```sh
@@ -43,6 +49,13 @@ integration checks.
 7. Select a graph node and use **Branch…** or **Name version…**. Right-click a branch head to use it for subsequent saves. Changing the capture branch does not replace native document contents; use **Open with** to resume an old state in a new file.
 
 Drag the dividers to resize the history sidebar, viewport, inspector, assembly tray, and the inspector’s object/details sections. Window geometry and pane sizes are remembered per project.
+
+USD reading, texture packing and mesh preparation run in background workers
+(at most two scene loads at once). The viewport installs prepared objects in
+short batches with an object counter, then renders the completed scene. Closing
+a tab cancels pending preparation/upload work. GPU uploads and rendering still
+use the GUI thread; exceptionally large individual meshes or expensive rendered
+frames can still pause interaction. See [viewport loading notes](docs/VIEWPORT_LOADING.md).
 
 **Watch native saves** attaches the bundled hooks through the running community
 Blender MCP listener (localhost:9876) and Rhino listener. It starts a local inbox
@@ -143,6 +156,20 @@ formats as binary; Git storage and recovery remain separate concerns.
 
 The format evolves additively: new optional parameters preserve existing IDs, meanings and defaults. Unknown fields survive validation and known-field updates; unsupported required behavior is rejected explicitly. Old history is never rewritten on open. See the [data compatibility contract](docs/DATA_COMPATIBILITY.md) and its frozen V1 regression fixtures.
 
+## Optional B-rep jobs
+
+**Prepare B-rep job…** archives per-part mesh inputs and lineage from a saved
+version for future DualBrep reconstruction. `cad-git brep prepare` provides the
+same workflow; `cad-git brep doctor` checks a separately configured CUDA runtime.
+This release prepares inputs only: no model inference or STEP generation is
+enabled yet. Preparation works without CUDA; Apple Silicon inference requires a
+backend port and validation. See [setup, limitations and the Metal port plan](docs/DUALBREP.md).
+
+Reconstruction itself is outside the core product scope. The separate
+[DualBrep fork](https://github.com/range-et/DualBrep) may provide an optional Docker
+service later; CAD-GIT would submit jobs and track results, or report that no
+compatible runtime is available. That service integration is not implemented yet.
+
 ## Current boundaries
 
 This is a working first prototype, not completion of every acceptance criterion
@@ -169,12 +196,22 @@ three-agent pass, including inherited UVs, initialization failures and preview d
 
 ## Verification
 
+Follow [build/review gates](docs/BUILD_GATES.md) and the repository's
+[agent instructions](AGENTS.md). The repeatable candidate check is
+`uv run python scripts/check.py --build --ui --mcp` in a graphical session
+with the development and MCP extras installed.
+The [UX action/state matrix](docs/UX_TEST_MATRIX.md) tracks tested workflows and
+explicit coverage gaps. It records per-check logs and a JSON report under ignored `build/qa/`.
+CI runs core/build gates; independent reviews and applicable GUI/native checks
+are recorded separately using the [review template](docs/REVIEW_TEMPLATE.md).
+
 ```sh
 uv run pytest -q
 uv run python tests/integration/cli_smoke.py
 uv run python tests/integration/ui_smoke.py
 uv run python tests/integration/ui_robustness.py
 uv run python tests/integration/material_library_smoke.py
+uv run python tests/integration/viewport_responsiveness.py
 uv run python tests/integration/texture_preview_smoke.py
 ```
 
@@ -183,7 +220,7 @@ two source tabs, mesh selection, assembly preview and immutable assembly creatio
 It requires a graphical session. Native integration checks and their scope are
 recorded in [V1 implementation notes](docs/V1_IMPLEMENTATION.md).
 
-Deferred design topics are tracked in [Future features and open questions](docs/FUTURE_FEATURES_AND_OPEN_QUESTIONS.md), including native editability across application round trips. These are outside current V1 scope.
+Open work and deferred ideas are tracked in [issues.md](issues.md). The [native editability design note](docs/FUTURE_FEATURES_AND_OPEN_QUESTIONS.md) preserves background on application round trips; it is not a second backlog.
 
 See also the [historical OpenUSD/Rust assessment](docs/USD_ARCHITECTURE.md),
 [related asset managers](docs/RELATED_SYSTEMS.md), and

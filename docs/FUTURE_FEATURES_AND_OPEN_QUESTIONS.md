@@ -1,7 +1,9 @@
 # Future features and open questions
 
-This document records deferred topics for later review. Entries are not V1
-requirements or commitments to a particular implementation.
+This design note preserves the reasoning behind deferred native-editability work.
+As of 2026-11-09, [issues.md](../issues.md) is the authoritative open-work ledger;
+[features.md](../features.md) records implemented capabilities. This note is not
+a second backlog or a commitment to a particular implementation. See issue #7.
 
 ## Native editability across application round trips
 
@@ -35,19 +37,7 @@ gate.
 
 ## Follow-ups from the adversarial reviews
 
-These are usability/scaling improvements, not unresolved silent-data-loss fixes.
-See [review findings and fixes](REVIEWS_AND_HARDENING.md) for completed work.
-
-- A persistent per-application capture panel showing binding, capture branch,
-  latest snapshot, queued/failed events, retry and Stop controls.
-- A guided branch-from-history action that distinguishes assigning future saves
-  to a branch from opening historical contents in a new native working file.
-- Stable native document IDs alongside application/branch lanes, so independent
-  files can have separate streams while retaining cross-tool lineage.
-- Mark or refresh assembly previews when their draft recipe changes.
-- Cache the history index and virtualize graph rendering for very large projects.
-- Display timestamps in the user's timezone and expand screen-reader support.
-- Show material-override fidelity explicitly: native renderer graph restoration
-  and manager inspection shading are different capabilities.
-- Stage/cache cleanup policies and explicit recovery tooling for failed captures,
-  avoiding automatic deletion of data needed for diagnosis.
+Open follow-ups now live in [issues.md](../issues.md): capture and branching (#5),
+scene/history scaling (#6), material fidelity (#8), accessibility (#9), and
+adapters/recovery (#10). Completed fixes remain in
+[review findings and fixes](REVIEWS_AND_HARDENING.md).

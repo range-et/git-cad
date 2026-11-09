@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-08",
+  "reviewer": "viewport_ux",
+  "scope": "Independent read-only audit of uncommitted async viewport loading UI",
+  "source_edits": false,
+  "user_project_or_native_apps_modified": false,
+  "checks": {
+    "gui_upload_failure_and_retry": "passed",
+    "failed_load_action_disable": "passed",
+    "mode_and_edges_during_load": "passed",
+    "background_load_keeps_active_tab": "passed",
+    "draft_edit_during_load_marks_preview_stale": "passed",
+    "screenshot_visual_inspection": "passed",
+    "large_scene_and_close_during_upload": "passed"
+  },
+  "probe": "/tmp/cadgit_viewport_ux_probe.py",
+  "screenshot": "/tmp/cadgit-viewport-ux.png",
+  "findings": [],
+  "remaining_proven_p0_p1": [],
+  "limitations": [
+    "Final render remains on GUI thread as documented.",
+    "Worker preparation has a text notice rather than determinate progress; queued versus active worker is not distinguished.",
+    "Tests used synthetic temporary projects, not the user's live Love Park window."
+  ]
+}

@@ -3,11 +3,10 @@ import tempfile,subprocess,json,sys
 from pathlib import Path
 repo=Path(__file__).resolve().parents[2];sys.path.insert(0,str(repo/'tests'))
 from test_history import box
-cli=repo/'.venv/bin/cad-git'
 with tempfile.TemporaryDirectory() as directory:
     root=Path(directory);project=root/'other-repo';project.mkdir();(project/'existing.txt').write_text('keep me')
     def run(*args):
-        result=subprocess.run([str(cli),*map(str,args)],capture_output=True,text=True,check=True)
+        result=subprocess.run([sys.executable,'-m','cadgit.cli',*map(str,args)],capture_output=True,text=True,check=True)
         return json.loads(result.stdout)
     run('init',project);source=box(root/'part.usda',.001)
     snap=run('-p',project,'ingest',source,'--source','rhino')

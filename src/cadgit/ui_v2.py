@@ -1,6 +1,7 @@
 """File-first workbench: snapshot tabs -> mesh selection -> saved USD assembly."""
 from __future__ import annotations
-import json, os, uuid
+import json, os, uuid, time
+from threading import Event
 from pathlib import Path
 os.environ.setdefault('QT_API','pyside6')
 import numpy as np
@@ -12,8 +13,14 @@ from .ui import Job,theme,label,button,panel
 from .store import Project,CadgitError,read_json,atomic_json
 from .usd import meshes,stage_info,assemble,export_stl,open_stage
 from .models import Selection
+from .viewport_data import prepare_parts
 from .history_graph import build_graph
 from .history_view import HistoryGraph
+
+# Limit simultaneous scene preparation so opening many tabs does not launch a
+# full set of large USD/texture allocations for every CPU core.
+VIEWPORT_POOL=QtCore.QThreadPool()
+VIEWPORT_POOL.setMaxThreadCount(2)
 
 
 def tip(widget,text):
@@ -22,16 +29,19 @@ def tip(widget,text):
 class SnapshotTab(W.QWidget):
     loaded=QtCore.Signal()
     picked=QtCore.Signal(str)
+    display_finished=QtCore.Signal()
     def __init__(self,record=None):
         super().__init__();self.record=record;self.closed=False;self.load_state='loading';self.parts=[];self.paths={};self.selected=set();self.info={};self.mode=os.environ.get('CADGIT_VIEWPORT_MODE','Shaded');self.edges=False
         layout=W.QVBoxLayout(self);layout.setContentsMargins(0,0,0,0)
-        self.load_notice=W.QLabel('Loading version…');self.load_notice.setWordWrap(True);layout.addWidget(self.load_notice)
+        self.cancelled=Event();self._prepared=[];self._upload_index=0
+        self.upload_timer=QtCore.QTimer(self);self.upload_timer.setInterval(1);self.upload_timer.timeout.connect(self._upload_batch)
+        self.load_notice=W.QLabel('Reading USD and preparing geometry / textures…');self.load_notice.setWordWrap(True);layout.addWidget(self.load_notice)
         self.plotter=QtInteractor(self,auto_update=False);layout.addWidget(self.plotter.interactor)
         self.plotter.set_background('#171A1E');self.plotter.add_axes()
         self.picker=vtkCellPicker();self.picker.SetTolerance(.0005);self.picker.PickFromListOn()
         self._press_position=None;self.plotter.installEventFilter(self)
     def eventFilter(self,watched,event):
-        if watched is self.plotter:
+        if watched is self.plotter and self.load_state=='ready':
             if event.type()==QtCore.QEvent.MouseButtonPress and event.button()==QtCore.Qt.LeftButton:
                 self._press_position=event.position().toPoint()
             elif event.type()==QtCore.QEvent.MouseButtonRelease and event.button()==QtCore.Qt.LeftButton:
@@ -45,36 +55,43 @@ class SnapshotTab(W.QWidget):
                     path=self.paths.get(actor.GetAddressAsString(''),'') if actor else ''
                     self.picked.emit(path)
         return super().eventFilter(watched,event)
-    def display(self,parts,info=None):
-        from .texture_preview import render_maps
+    def display(self,parts,info,prepared):
         self.parts=parts;self.info=info or {};self.plotter.clear();self.paths={};self.material_textures={};self.picker.InitializePickList()
-        for i,part in enumerate(parts):
-            poly=pv.PolyData(part['points'],part['faces'])
-            maps=render_maps(part)
-            if maps and len(maps['uv']):
-                # USD UV seams are per face corner, whereas VTK UVs are per point.
-                # Duplicate render vertices only; retain source geometry for exports.
-                poly.compute_normals(cell_normals=False,consistent_normals=False,inplace=True)
-                ids=[];faces=[];offset=0
-                while offset<len(part['faces']):
-                    count=int(part['faces'][offset]);ids.extend(part['faces'][offset+1:offset+1+count]);faces.extend([count,*range(len(ids)-count,len(ids))]);offset+=count+1
-                normals=poly.point_data['Normals'][ids];poly=pv.PolyData(part['points'][ids],faces)
-                poly.point_data['Normals']=normals;poly.point_data.active_normals_name='Normals';poly.active_texture_coordinates=maps['uv']
+        self._prepared=prepared;self._upload_index=0;self.load_state='loading'
+        self.load_notice.setText('Preparing viewport: 0 / '+str(len(parts))+' objects');self.load_notice.show()
+        self.upload_timer.start()
+    def cancel_load(self):
+        self.cancelled.set();self.upload_timer.stop();self._prepared=[];self.display_finished.emit()
+    def _upload_batch(self):
+        if self.closed or self.cancelled.is_set():self.cancel_load();return
+        try:
+            deadline=time.monotonic()+.008
+            while self._upload_index<len(self._prepared):
+                i=self._upload_index;part=self.parts[i];poly,maps=self._prepared[i]
                 textures={}
-                for key in ['base_color','orm']:
-                    if key not in maps:continue
-                    texture=pv.Texture(maps[key]);texture.interpolate=True;texture.mipmap=True
-                    texture.SetWrap({'repeat':texture.Repeat,'clamp':texture.ClampToEdge,'black':texture.ClampToBorder,'mirror':texture.MirroredRepeat}[maps['wrap']])
-                    texture.SetBorderColor((0,0,0,maps['border_opacity']) if key=='base_color' else maps['orm_border'])
-                    texture.SetUseSRGBColorSpace(key=='base_color');textures[key]=texture
+                if maps and len(maps['uv']):
+                    for key in ['base_color','orm']:
+                        if key not in maps:continue
+                        texture=pv.Texture(maps[key]);texture.interpolate=True;texture.mipmap=True
+                        texture.SetWrap({'repeat':texture.Repeat,'clamp':texture.ClampToEdge,'black':texture.ClampToBorder,'mirror':texture.MirroredRepeat}[maps['wrap']])
+                        texture.SetBorderColor((0,0,0,maps['border_opacity']) if key=='base_color' else maps['orm_border'])
+                        texture.SetUseSRGBColorSpace(key=='base_color');textures[key]=texture
                 self.material_textures[i]=textures
-            actor=self.plotter.add_mesh(poly,color=part['color'],smooth_shading=True,split_sharp_edges=True,show_edges=False,name='mesh_'+str(i),specular=0.35,specular_power=30)
-            for key,texture in self.material_textures.get(i,{}).items():
-                if key=='base_color':actor.prop.SetBaseColorTexture(texture)
-                elif key=='orm':actor.prop.SetORMTexture(texture)
-            self.paths[actor.GetAddressAsString('')]=part['path'];self.picker.AddPickList(actor)
-        self.plotter.add_axes();self.plotter.view_isometric();self.plotter.reset_camera()
-        self.setup_studio();self.apply_mode();self.load_state='ready';self.load_notice.hide();self.loaded.emit()
+                actor=self.plotter.add_mesh(poly,color=part['color'],smooth_shading=False,show_edges=False,name='mesh_'+str(i),specular=.35,specular_power=30,render=False,reset_camera=False)
+                actor.prop.interpolation='phong'
+                for key,texture in textures.items():
+                    if key=='base_color':actor.prop.SetBaseColorTexture(texture)
+                    elif key=='orm':actor.prop.SetORMTexture(texture)
+                self.paths[actor.GetAddressAsString('')]=part['path'];self.picker.AddPickList(actor)
+                self._upload_index+=1
+                if time.monotonic()>=deadline:break
+            self.load_notice.setText('Preparing viewport: '+str(self._upload_index)+' / '+str(len(self.parts))+' objects')
+            if self._upload_index<len(self._prepared):return
+            self.upload_timer.stop();self._prepared=[]
+            self.plotter.add_axes();self.plotter.view_isometric(render=False);self.plotter.reset_camera(render=False)
+            self.setup_studio();self.load_state='ready';self.apply_mode();self.load_notice.hide();self.loaded.emit();self.display_finished.emit()
+        except Exception as exc:
+            self.upload_timer.stop();self._prepared=[];self.load_error(str(exc));self.display_finished.emit()
     def load_error(self,message):
         self.load_state='error';self.load_notice.setText(('Unable to load this version. Click its graph node to retry.' if self.record else 'Unable to load this draft. Click Preview assembly to retry.')+'\n'+str(message));self.load_notice.show()
     def setup_studio(self):
@@ -82,7 +99,9 @@ class SnapshotTab(W.QWidget):
         # after every file load; relying on the automatic headlight flattens depth.
         self.plotter.remove_all_lights()
         if not self.parts:return
-        points=np.concatenate([part['points'] for part in self.parts]);mn=points.min(0);mx=points.max(0)
+        bounds=np.asarray([bound for part in self.parts for bound in (part.get('_preview_bounds') or [])])
+        if not len(bounds):return
+        mn=bounds.min(0);mx=bounds.max(0)
         center=(mn+mx)/2;self.scene_scale=max(float(np.linalg.norm(mx-mn)),1e-6)
         for direction,intensity,color in [((-1,-1,2),1.05,'#FFF3E2'),((1,-.4,.6),.45,'#D6E8FF'),((.3,1,1.5),.8,'#FFFFFF')]:
             position=center+np.array(direction)*self.scene_scale
@@ -101,6 +120,7 @@ class SnapshotTab(W.QWidget):
         self._studio_mode=None
         self.plotter.enable_anti_aliasing('fxaa')
     def apply_mode(self):
+        if self.load_state!='ready':return
         rendered=self.mode=='Rendered preview'
         if getattr(self,'_studio_mode',None)!=self.mode:
             self.plotter.set_background('#202731',top='#424D5B')
@@ -127,6 +147,7 @@ class SnapshotTab(W.QWidget):
             prop.line_width=2 if active else 1
         self.plotter.render()
     def fit(self,selection=False):
+        if self.load_state!='ready':return
         if selection and self.selected:
             pts=[p['points'] for p in self.parts if any(p['path']==x or p['path'].startswith(x+'/') for x in self.selected)]
             if pts:
@@ -168,6 +189,7 @@ class Window(W.QMainWindow):
         for action in modes.actions():view_options.addAction(action)
         self.view_menu.setMenu(view_options);self.view_menu.setToolTip('All display and framing controls, including those hidden when the window is narrow.');file_actions.addWidget(self.view_menu)
         self.export_action=file_actions.addAction('Export STL…',self.export_stl_dialog);self.export_action.setToolTip('Export the active saved tab, not the assembly draft below.')
+        self.brep_action=file_actions.addAction('Prepare B-rep job…',self.prepare_brep_dialog);self.brep_action.setToolTip('Prepare separate mesh inputs for optional DualBrep reconstruction. No inference or STEP is produced yet.')
         self.main_action=file_actions.addAction('Set as main',self.set_main);self.main_action.setToolTip('Select the assembly in the current tab as main.');cl.addWidget(file_actions)
         for toolbar in [modes,file_actions]:
             extension=toolbar.findChild(W.QToolButton,'qt_toolbar_ext_button')
@@ -246,12 +268,14 @@ class Window(W.QMainWindow):
     def closeEvent(self,event):
         self._closing=True
         self.library_browser.shutdown()
+        for cancelled in getattr(self,'_brep_preparations',[]):cancelled.set()
+        for index in range(self.tabs.count()):self.tabs.widget(index).cancel_load()
         if hasattr(self,'timer'):self.timer.stop()
         settings=self.layout_settings();settings.setValue('geometry',self.saveGeometry())
         for name in ['workbench','columns','inspector']:settings.setValue(name,getattr(self,name+'_splitter').saveState())
         settings.setValue('workspace',self.workspace_tabs.currentIndex());settings.setValue('library_splitter',self.library_browser.splitter.saveState())
         settings.sync();super().closeEvent(event)
-    def job(self,fn,done,on_error=None):
+    def job(self,fn,done,on_error=None,pool=None):
         if self._closing:return
         j=Job(fn);self.jobs.append(j);self.statusBar().showMessage('Working…')
         def finish():
@@ -268,7 +292,7 @@ class Window(W.QMainWindow):
                 if on_error and on_error(error) is False:return
             except Exception as exc:error=str(error)+'\n'+str(exc)
             self.update_actions();self.fail(error)
-        j.signals.done.connect(complete);j.signals.error.connect(failed);QtCore.QThreadPool.globalInstance().start(j)
+        j.signals.done.connect(complete);j.signals.error.connect(failed);(pool or QtCore.QThreadPool.globalInstance()).start(j)
     def fail(self,message):
         if not self._closing:self.statusBar().showMessage(str(message));W.QMessageBox.warning(self,'CAD-GIT',str(message))
     def tab_is_open(self,tab):
@@ -279,6 +303,7 @@ class Window(W.QMainWindow):
         if self._closing or not hasattr(self,'tabs') or not hasattr(self,'save_button'):return
         tab=self.current();ready=tab is not None and tab.load_state=='ready';saved=ready and tab.record is not None
         self.open_menu.setEnabled(bool(saved));self.export_action.setEnabled(bool(saved));self.main_action.setEnabled(bool(saved and tab.record['id'].startswith('assembly_')))
+        self.brep_action.setEnabled(bool(saved))
         self.add_button.setEnabled(bool(saved and tab.selected));self.material_combo.setEnabled(bool(saved))
         self.save_button.setEnabled(bool(self.draft) and not self._saving_assembly);self.preview_button.setEnabled(bool(self.draft));self.clear_button.setEnabled(bool(self.draft));self.remove_button.setEnabled(self.table.currentRow()>=0);self.move_button.setEnabled(self.table.currentRow()>=0)
     def current(self):return self.tabs.currentWidget()
@@ -391,28 +416,93 @@ class Window(W.QMainWindow):
         if tab is not None:
             self.tabs.setCurrentWidget(tab)
             if tab.load_state!='error':return
-            tab.load_state='loading';tab.load_notice.setText('Retrying version load…');tab.load_notice.show()
+            tab.cancelled.clear();tab.load_state='loading';tab.load_notice.setText('Retrying version load…');tab.load_notice.show()
         else:
-            tab=SnapshotTab(r);tab.picked.connect(self.pick_path);tab.loaded.connect(self.tab_changed);self.tabs_by_id[r['id']]=tab
+            tab=SnapshotTab(r);tab.picked.connect(self.pick_path);self.tabs_by_id[r['id']]=tab
             name=(r['label'] if r['id'].startswith('assembly_') else self.native_name(r))+' · '+r['id'][-5:]
             idx=self.tabs.addTab(tab,name);self.tabs.setTabToolTip(idx,r['label']+'\n'+r['created_at']);self.tabs.setCurrentWidget(tab)
         self.update_actions();path=self.project.stage_path(r)
         def done(data):
             if not self.tab_is_open(tab):return
-            tab.display(data[0],data[1]);self.tab_changed();self.statusBar().showMessage('Select meshes in the viewport or object tree, then Add selected to assembly.')
-            if self.screenshot:QtCore.QTimer.singleShot(600,self.save_screenshot)
+            self.present_tab(tab,data[0],data[1],data[2])
         def failed(error):
             if not self.tab_is_open(tab):return False
             tab.load_error(error)
         def work():
+            if tab.cancelled.is_set():return None
             verification=self.project.verify(r['id'])
             if not verification['ok']:raise CadgitError('Snapshot integrity check failed: '+'; '.join(verification['errors']))
-            return meshes(path,include_textures=True),stage_info(path)
-        self.job(work,done,failed)
+            if tab.cancelled.is_set():return None
+            parts=meshes(path,include_textures=True)
+            return parts,stage_info(path),prepare_parts(parts,tab.cancelled)
+        self.job(work,done,failed,pool=VIEWPORT_POOL)
+    def present_tab(self,tab,parts,info,prepared):
+        # Track GUI upload as work too, so actions/tests cannot race a half scene.
+        self.jobs.append(tab)
+        def finished():
+            tab.display_finished.disconnect(finished)
+            if tab in self.jobs:self.jobs.remove(tab)
+            if not self.tab_is_open(tab):return
+            if not tab.record:self.mark_preview_state(tab)
+            self.tab_changed()
+            self.statusBar().showMessage('Select meshes to add to an assembly.' if tab.load_state=='ready' else 'Viewport load failed; retry this version.')
+            if self.screenshot and tab.load_state=='ready':QtCore.QTimer.singleShot(600,self.save_screenshot)
+        tab.display_finished.connect(finished)
+        try:tab.display(parts,info,prepared)
+        except Exception:
+            finished();raise
+    def prepare_brep_dialog(self):
+        tab=self.current()
+        if not tab or not tab.record or tab.load_state!='ready':return
+        # Freeze identity and selection before opening a dialog or starting work.
+        ref=tab.record['id'];selected=sorted(tab.selected)
+        count=sum(not selected or any(p['path']==x or p['path'].startswith(x+'/') for x in selected) for p in tab.parts)
+        dialog=W.QDialog(self);dialog.setWindowTitle('Prepare B-rep reconstruction inputs');dialog.resize(650,560)
+        layout=W.QVBoxLayout(dialog)
+        text=W.QLabel('Saved version: '+ref+'\n'+str(count)+' mesh objects selected')
+        text.setTextFormat(QtCore.Qt.PlainText);text.setWordWrap(True);layout.addWidget(text)
+        paths=W.QPlainTextEdit();paths.setReadOnly(True);paths.setPlainText('\n'.join(selected) if selected else 'Whole saved scene');paths.setMaximumHeight(120);layout.addWidget(paths)
+        note=W.QLabel('Preparation only: saves per-part PLY inputs, units, placement and lineage. No STEP is created. Optional inference requires a compatible CUDA runtime and model checkpoints; execution is not enabled in this release.\n\nReconstruction fits new surfaces. It does not recover original NURBS control points or modeling history.')
+        note.setWordWrap(True);note.setSizePolicy(W.QSizePolicy.Preferred,W.QSizePolicy.Minimum);layout.addWidget(note)
+        split=W.QCheckBox('Split disconnected components into separate reconstruction parts');layout.addWidget(split)
+        warning=W.QLabel('Leave unchecked to reject disconnected meshes. Splitting nested shells can change the meaning of cavities or hollow bodies.');warning.setWordWrap(True);layout.addWidget(warning)
+        base=W.QCheckBox('Allow authored base polygons when USD requests subdivision');layout.addWidget(base)
+        runtime=button('Check optional CUDA runtime…',lambda:None);layout.addWidget(runtime)
+        def check_runtime():
+            from .brep import runtime_status
+            runtime.setEnabled(False)
+            def show(value):
+                runtime.setEnabled(True)
+                if dialog.isVisible():W.QMessageBox.information(dialog,'Optional runtime',json.dumps(value,indent=2))
+            self.job(runtime_status,show,lambda error:runtime.setEnabled(True))
+        runtime.clicked.connect(check_runtime)
+        buttons=W.QDialogButtonBox(W.QDialogButtonBox.Ok|W.QDialogButtonBox.Cancel);buttons.button(W.QDialogButtonBox.Ok).setText('Prepare inputs');layout.addWidget(buttons)
+        buttons.accepted.connect(dialog.accept);buttons.rejected.connect(dialog.reject)
+        if dialog.exec()!=W.QDialog.Accepted:return
+        split_components=split.isChecked();allow_base_mesh=base.isChecked()
+        from .brep import prepare_job
+        cancel=Event();self._brep_preparations=getattr(self,'_brep_preparations',[]);self._brep_preparations.append(cancel)
+        progress=W.QProgressDialog('Preparing B-rep inputs. No model inference is running.','Cancel',0,0,self)
+        progress.setWindowTitle('Preparing job');progress.setMinimumDuration(0);progress.setAutoClose(False);progress.canceled.connect(cancel.set);progress.show()
+        def finish():
+            progress.canceled.disconnect(cancel.set)
+            progress.close()
+            if cancel in self._brep_preparations:self._brep_preparations.remove(cancel)
+        def done(result):
+            finish();path=result['_directory']
+            self.statusBar().showMessage('B-rep job prepared; no STEP generated. '+path)
+            message=W.QMessageBox(self);message.setWindowTitle('B-rep job prepared');message.setTextFormat(QtCore.Qt.PlainText)
+            message.setText('Inputs and lineage saved. No inference has run and no STEP exists yet.\n\n'+path)
+            reveal=message.addButton('Reveal job folder',W.QMessageBox.ActionRole);message.addButton(W.QMessageBox.Close);message.exec()
+            if message.clickedButton() is reveal:QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
+        def failed(error):
+            finish()
+            if cancel.is_set():self.statusBar().showMessage('B-rep input preparation cancelled.');return False
+        self.job(lambda:prepare_job(self.project,ref,selected,split_components,allow_base_mesh,cancel),done,failed)
     def close_tab(self,index):
         tab=self.tabs.widget(index)
         if tab is None:return
-        tab.closed=True
+        tab.closed=True;tab.cancel_load()
         if tab.record:self.tabs_by_id.pop(tab.record['id'],None)
         self.tabs.removeTab(index);tab.plotter.close();tab.deleteLater();self.update_actions()
     def tab_changed(self,*_):
@@ -540,6 +630,7 @@ class Window(W.QMainWindow):
             library=Library(self.project);notes=[]
             result=[];prims=[{'path':'/Draft','name':'Draft assembly','type':'Xform'}];known={'/Draft'}
             for index,s in enumerate(selections):
+                if tab.cancelled.is_set():return None
                 r=self.project.resolve(s['snapshot_id'])
                 verification=self.project.verify(r['id'])
                 if not verification['ok']:raise CadgitError('Snapshot integrity check failed: '+'; '.join(verification['errors']))
@@ -564,14 +655,14 @@ class Window(W.QMainWindow):
                         if ancestor and ancestor not in known:
                             prims.append({'path':ancestor,'name':ancestor.rsplit('/',1)[-1],'type':'Xform'});known.add(ancestor)
                     prims.append({'path':part['path'],'name':part['name'],'type':'Mesh'})
-            return result,{'prims':prims},list(dict.fromkeys(notes))
+            return result,{'prims':prims},list(dict.fromkeys(notes)),prepare_parts(result,tab.cancelled)
         def done(data):
             if self.tab_is_open(tab):
-                tab.preview_notes=data[2];tab.display(data[0],data[1]);self.mark_preview_state(tab);self.tab_changed();self.statusBar().showMessage('Draft changed; preview again to update this view.' if tab.preview_stale else (' '.join(tab.preview_notes) or 'Draft preview • save the assembly to export or open it in a native application.'))
+                tab.preview_notes=data[2];self.present_tab(tab,data[0],data[1],data[3])
         def failed(error):
             if not self.tab_is_open(tab):return False
             tab.load_error(error)
-        self.job(work,done,failed)
+        self.job(work,done,failed,pool=VIEWPORT_POOL)
     def save_assembly(self):
         if self._saving_assembly:return
         if not self.draft:return self.fail('Add geometry to the assembly list first.')

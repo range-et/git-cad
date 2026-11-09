@@ -12,6 +12,8 @@ material_app=typer.Typer();app.add_typer(material_app,name='material')
 branch_app=typer.Typer();app.add_typer(branch_app,name='branch')
 from .library_cli import app as library_app
 app.add_typer(library_app,name='library')
+from .brep_cli import app as brep_app
+app.add_typer(brep_app,name='brep')
 
 def emit(value):typer.echo(json.dumps(value,indent=2,default=str))
 

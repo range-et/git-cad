@@ -1,0 +1,30 @@
+name: CAD-GIT build gates
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core-and-build:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: '3.12'
+      - run: uv sync --frozen --extra dev --extra mcp
+      - run: uv run --frozen python scripts/check.py --build
+      - name: Summarize gate report
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          reports=sorted(Path('build/qa').glob('*/report.json'))
+          if reports:
+              with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as output:
+                  output.write('```json\n'+reports[-1].read_text()+'\n```\n')
+          PY

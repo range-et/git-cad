@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-09",
+  "reviewer": "dualbrep_ux_scope",
+  "scope": "Read-only preparation-only DualBrep UI workflow audit",
+  "source_edits": false,
+  "live_user_projects_modified": false,
+  "findings": [
+    {
+      "priority": "P2",
+      "finding": "Unbounded selected-path label made Prepare inputs button offscreen for151 selected meshes",
+      "initial_dialog": [
+        620,
+        2708
+      ],
+      "screen": [
+        1512,
+        875
+      ],
+      "status": "fixed and independently rechecked: bounded scrollable path editor; dialog650x588, action visible"
+    },
+    {
+      "priority": "P2",
+      "finding": "First bounded-layout fix clipped explanatory note by15px",
+      "status": "fixed and independently visually rechecked: note actualheight88 vs required80, complete preparation/noSTEP/NURBS disclosure visible"
+    }
+  ],
+  "verification": [
+    "Frozen version and selection survive tab switch during confirmation",
+    "Preparation-only copy and unchecked split/base defaults",
+    "Draft action disabled",
+    "Source archive hashes unchanged",
+    "Successful bundle contains no STEP and message states no inference ran",
+    "User cancellation leaves no additional committed job and reports cancelled",
+    "Injected preparation failure shows error, closes progress, produces no success message or additional job",
+    "151-selection dialog actions remain on-screen and explanatory labels fit",
+    "Actual screenshots visually inspected"
+  ],
+  "remaining_proven_p1": [],
+  "probes": [
+    "/tmp/cadgit_brep_ux_probe.py",
+    "/tmp/cadgit_brep_large_dialog.py"
+  ],
+  "screenshots": [
+    "/tmp/cadgit-brep-prepare-ui.png",
+    "/tmp/cadgit-brep-large-selection.png"
+  ],
+  "limits": [
+    "Preparation-only scope: no inference or actual STEP/Rhino fidelity validation",
+    "Local runtime probe not certified against CUDA hardware",
+    "Progress remains indeterminate while input bundle is prepared"
+  ]
+}

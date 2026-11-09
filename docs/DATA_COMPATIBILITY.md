@@ -32,6 +32,10 @@ asset revisions carry the same gate. Older readers must reject these semantics
 rather than silently discard a logical material assignment. Legacy captured
 native shader IDs retain their original meaning.
 
+Prepared B-rep input bundles use `cadgit.brep-job.v1` and live in a separate
+`artifacts/brep_jobs` collection. They do not change snapshot/assembly meanings or
+replace normal Rhino mesh handoffs. A prepared job is not a reconstructed result.
+
 ## Preserve unfamiliar data
 
 Typed models retain unfamiliar fields when validating and serializing. Readers

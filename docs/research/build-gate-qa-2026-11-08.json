@@ -1,0 +1,46 @@
+{
+  "scope": "Independent read-only QA audit of build/review gates, packaging and failure reporting",
+  "date": "2026-11-08",
+  "reviewer": "build_gate_qa",
+  "source_edits": false,
+  "live_native_apps_modified": false,
+  "findings": [
+    {
+      "priority": "P1",
+      "finding": "Source changes during checks could produce a green report for mixed revisions",
+      "status": "fixed and independently rechecked with injected source drift"
+    },
+    {
+      "priority": "P2",
+      "finding": "Timed-out check could leave descendant processes running",
+      "status": "fixed and independently rechecked with child marker probe"
+    },
+    {
+      "priority": "P2",
+      "finding": "Wheel smoke bypassed installed console entrypoint metadata",
+      "status": "fixed and independently rechecked for valid, missing and broken entrypoints"
+    },
+    {
+      "priority": "P3",
+      "finding": "Diff gate omitted staged changes; failure reports did not list selected checks left unrun",
+      "status": "fixed; staged HEAD diff inspected and failure/interruption reports independently checked"
+    }
+  ],
+  "verification": [
+    "Initial full runner evidence reviewed: 11 selected checks passed (140 core tests, CLI, build/install/wheel and five graphical suites)",
+    "Independent temporary-repo source-drift injection fails exit 1 and reports differing final_source_state",
+    "POSIX timeout terminates parent and descendant; child cannot write delayed marker",
+    "Failed core gate stops run and lists remaining gates pending",
+    "KeyboardInterrupt yields interrupted report with remaining gates pending",
+    "Built current wheel in temp directory; installed entrypoint --help succeeds",
+    "Missing cad-git metadata entry rejected",
+    "Broken cad-git callable rejected",
+    "tests/test_build_gates.py: 2 passed"
+  ],
+  "remaining_proven_p1": [],
+  "limitations": [
+    "GitHub-hosted workflow not executed remotely; branch protection unchanged",
+    "UI suites not rerun by QA agent to avoid concurrent graphical runs; parent is responsible for final stable-tree full gate",
+    "No live-native/MCP protocol changes or certification in this scope"
+  ]
+}

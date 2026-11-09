@@ -181,7 +181,7 @@ class Project:
 
     def records(self,kind='snapshots',strict=True):
         from .models import Snapshot,Assembly
-        if kind not in {'snapshots','assemblies','materials','artifacts/prints'}:raise CadgitError('Unknown record collection: '+str(kind))
+        if kind not in {'snapshots','assemblies','materials','artifacts/prints','artifacts/brep_jobs'}:raise CadgitError('Unknown record collection: '+str(kind))
         paths=(self.root/'history/sources').rglob('manifest.json') if kind=='snapshots' else self.root.glob(f'{kind}/*/manifest.json')
         records=[];issues=[]
         for path in paths:
@@ -427,7 +427,17 @@ class Project:
         return {'name':name,'snapshot_id':record['id']}
 
     def verify(self, ref, _stack=None):
-        record=ref if isinstance(ref,dict) else self.resolve(ref)
+        if isinstance(ref,dict):record=ref
+        elif isinstance(ref,str) and ref.startswith('print_'):
+            # Export returns an artifact ID, not a scene reference. Keep this
+            # exact-ID lookup separate so artifacts never enter scene resolution.
+            matches=[r for r in self.records('artifacts/prints',strict=False) if r['id']==ref]
+            if len(matches)!=1:raise CadgitError('Unknown or ambiguous print artifact: '+ref)
+            record=matches[0];directory=Path(record['_directory'])
+            collection=self.root/'artifacts/prints'
+            if (self.root/'artifacts').is_symlink() or collection.is_symlink() or directory.is_symlink() or directory.name!=ref or not directory.resolve().is_relative_to(collection.resolve()):
+                raise CadgitError('Unsafe print artifact archive: '+ref)
+        else:record=self.resolve(ref)
         errors=[];base=Path(record['_directory']).resolve()
         stack=set(_stack or ())
         if record['id'] in stack:return {'id':record['id'],'ok':False,'errors':['Cyclic asset dependency']}

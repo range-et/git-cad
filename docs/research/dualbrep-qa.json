@@ -1,0 +1,49 @@
+{
+  "date": "2026-11-09",
+  "reviewer": "build_gate_qa",
+  "scope": "Independent read-only QA of optional DualBrep preparation, CLI, storage verification, runtime readiness and wheel-resource guard",
+  "source_edits": false,
+  "live_native_apps_modified": false,
+  "findings": [
+    {
+      "priority": "P1",
+      "finding": "Committed job directory could be moved outside collection and symlinked back while verify returned ok",
+      "status": "fixed; independent symlink probe now rejects with CadgitError"
+    },
+    {
+      "priority": "P2",
+      "finding": "Valid JSON non-object request caused uncaught TypeError in verify",
+      "status": "fixed; [] request returns structured ok=false with shape error"
+    },
+    {
+      "priority": "P2",
+      "finding": "Pinned upstream HEAD with modified tracked runtime code could report CUDA prerequisites ready",
+      "status": "fixed; simulated healthy CUDA with dirty pinned checkout returns prerequisites=false and modification diagnostic"
+    },
+    {
+      "priority": "P3",
+      "finding": "New B-rep bundle README was absent from explicit wheel resource gate",
+      "status": "fixed; brep_job_readme.txt checked"
+    },
+    {
+      "priority": "P1",
+      "finding": "VTK PLY readback downcast float64 coordinates when deriving normalization for small distant parts",
+      "status": "fixed concurrently with main; derives bounds from exact float64 values written; binary payload regression passes"
+    }
+  ],
+  "verification": [
+    "Original five B-rep tests passed before fixes",
+    "Actual CLI temporary-project init -> ingest -> prepare --select -> list/show/verify passed; no STEP produced",
+    "Default doctor reports preparation=true, execution=false, CUDA prerequisites=false with useful missing requirements",
+    "Independent post-fix probes passed for job symlink containment, malformed request shape and dirty runtime checkout",
+    "Final tests/test_brep.py: 8 passed after precision/readback fix",
+    "Binary float64 PLY regression preserves .002m extent for geometry centered at 1e6m; normalization derives from same written coordinates"
+  ],
+  "remaining_proven_p1": [],
+  "limitations": [
+    "No CUDA hardware/runtime or checkpoint inference executed; CUDA-positive probe is simulated to exercise readiness logic",
+    "Checkpoint file presence is not checkpoint validity/license certification; execution_available remains false",
+    "MPS availability is detected but supported upstream inference is not claimed",
+    "Parent must run final stable-tree build/UI gates; QA did not run concurrent GUI suites"
+  ]
+}
