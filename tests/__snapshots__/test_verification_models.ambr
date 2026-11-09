@@ -1,0 +1,81 @@
+# serializer version: 1
+# name: test_legacy_serialization_contract[Assembly-assembly.json]
+  dict({
+    'bindings': list([
+    ]),
+    'created_at': '2026-11-07T12:01:00.000000Z',
+    'entry_layer': 'scene.usda',
+    'extensions': dict({
+    }),
+    'files': list([
+    ]),
+    'future': dict({
+      'nested': list([
+        None,
+        True,
+        dict({
+          'unit': 'µm',
+          'value': 0,
+        }),
+      ]),
+    }),
+    'id': 'assembly_legacy_fixture',
+    'label': 'Original V1 assembly',
+    'required_features': list([
+    ]),
+    'schema_minor': 0,
+    'schema_version': 1,
+    'selections': list([
+      dict({
+        'label': 'Part',
+        'library_material_revision': None,
+        'material_revision': None,
+        'prim_path': '/World/Part',
+        'required_features': list([
+        ]),
+        'snapshot_id': 'snap_legacy_fixture',
+        'translation': list([
+          0.0,
+          0.0,
+          0.0,
+        ]),
+      }),
+    ]),
+    'warnings': list([
+    ]),
+  })
+# ---
+# name: test_legacy_serialization_contract[Snapshot-snapshot.json]
+  dict({
+    'branch': 'main',
+    'created_at': '2026-11-07T12:00:00.000000Z',
+    'entry_layer': 'scene.usda',
+    'extensions': dict({
+    }),
+    'files': list([
+    ]),
+    'future': dict({
+      'nested': list([
+        None,
+        True,
+        dict({
+          'unit': 'µm',
+          'value': 0,
+        }),
+      ]),
+    }),
+    'id': 'snap_legacy_fixture',
+    'label': 'Original V1 snapshot',
+    'metadata': dict({
+    }),
+    'parent': None,
+    'required_features': list([
+    ]),
+    'schema_minor': 0,
+    'schema_version': 1,
+    'source': 'rhino',
+    'trigger': 'ingest',
+    'warnings': list([
+    ]),
+  })
+# ---

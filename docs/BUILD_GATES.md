@@ -1,6 +1,6 @@
 # Build and release gates
 
-This is the recurring engineering workflow for CAD-GIT, effective November 8, 2026.
+This is the recurring engineering workflow for Git CAD, effective November 8, 2026.
 It turns the architecture → implementation → UX/QA → fixes → re-audit routine into
 an explicit contract. Automated tests run without AI agents; reviewers can be
 independent humans or, when working through an agent, delegated subagents.
@@ -49,7 +49,7 @@ independent humans or, when working through an agent, delegated subagents.
 ```sh
 uv sync --frozen --extra dev --extra mcp
 uv run python scripts/check.py --build
-uv run python scripts/check.py --build --ui --mcp
+uv run python scripts/check.py --build --ui --mcp --mutation
 ```
 
 The runner executes sequentially, stops on failure, and writes a JSON report plus
@@ -58,13 +58,13 @@ dirty state and diff digest, selected checks, elapsed times and explicit omissio
 The final source fingerprint must match the starting tree; concurrent source edits
 invalidate the run. Failures leave the remaining planned checks explicitly pending.
 On macOS/POSIX, timeouts and interrupts terminate the check's process group.
-It runs core pytest and CLI smoke; `--build` additionally builds the wheel/sdist,
+It runs scoped Ruff/mypy, core pytest (CI property profile and coverage XML) and CLI smoke; `--build` additionally builds the wheel/sdist,
 installs the wheel to a disposable directory and checks the installed CLI/resources.
 `--ui` adds geometry, failure/retry, materials, actual texture pixels, large-scene
 responsiveness, optional B-rep preparation, finite viewport combinations and dialog workflows. GUI suites require a working display/OpenGL context.
 Do not treat headless/offscreen success as evidence of native desktop interaction.
 
-The GitHub Actions workflow runs the core/build command on macOS for pull requests
+The GitHub Actions workflow runs static/core/build/MCP and compatibility mutation gates on macOS for pull requests
 and pushes to main. It does not run live Rhino/Blender or interactive GUI checks.
 Branch protection must be configured separately if the hosted status is to block
 merges; this repository file does not change GitHub settings.
@@ -107,3 +107,11 @@ settings, material revisions/filter combinations and frozen async targets).
 `--mcp` adds `mcp_workflow_smoke.py`, a real stdio client/server workflow; install
 the `mcp` extra first. The matrix maps coverage and gaps; it is not proof of every
 arbitrarily long action sequence or every native app/OS combination.
+
+## Layered verification
+
+See [the verification guide](TEST_VERIFICATION.md) for exact static scope, bounded
+generated inputs, existing runtime contracts, reviewed snapshots and the optional
+`--mutation` audit. Mutation statistics must be complete and score at least 95%;
+timeouts/crashes/uncovered outcomes are failures, not kills. CI enables this gate.
+No global coverage percentage or repository-wide typing claim is implied.

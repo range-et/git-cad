@@ -21,6 +21,7 @@ callback_errors = []
 
 with tempfile.TemporaryDirectory(prefix='cadgit-dialog-workflows-') as temporary:
     project = create(Path(temporary) / 'project')
+    second = None
     window = ui.Window(project)
     window.fail = lambda message: errors.append(str(message))
     window.show()
@@ -112,6 +113,41 @@ with tempfile.TemporaryDirectory(prefix='cadgit-dialog-workflows-') as temporary
         assert 'Test app…' in [a.text() for a in window.open_menu.menu().actions()]
         record('settings-save-updates-target-menu')
 
+        import cadgit.store as storage
+        configured=storage.read_json(project.root/'cadgit.json')
+        configured['future_setting']={'nested':[1,2]};storage.atomic_json(project.root/'cadgit.json',configured)
+        before_settings=(project.root/'cadgit.json').read_bytes()
+        before_events={p.name for p in (project.root/'history/events').iterdir()}
+        revised_target={**target,'label':'Recovered app'}
+        write_config=storage.atomic_json;sync_config=storage.fsync_dir
+        def denied_config(path,value,*args,**kwargs):
+            if Path(path)==project.root/'cadgit.json':raise OSError('Injected settings save denial')
+            return write_config(path,value,*args,**kwargs)
+        def failed_settings(dialog):
+            dialog.findChild(ui.W.QPlainTextEdit).setPlainText(json.dumps([revised_target]))
+            notices=[]
+            with patch.object(storage,'atomic_json',side_effect=denied_config),patch.object(ui.W.QMessageBox,'warning',side_effect=lambda *args:notices.append(args[2])):
+                dialog.findChild(ui.W.QDialogButtonBox).button(ui.W.QDialogButtonBox.Save).click()
+            assert dialog.isVisible() and 'Injected settings save denial' in notices[-1]
+            dialog.reject()
+        modal(failed_settings,window.settings)
+        assert (project.root/'cadgit.json').read_bytes()==before_settings
+        assert {p.name for p in (project.root/'history/events').iterdir()}==before_events
+        record('settings-failed-save-keeps-config-and-no-success-event')
+        def uncertain_config_sync(path):
+            if Path(path)==project.root:raise OSError('Injected settings sync warning')
+            return sync_config(path)
+        def published_settings(dialog):
+            dialog.findChild(ui.W.QPlainTextEdit).setPlainText(json.dumps([revised_target]))
+            with patch.object(storage,'fsync_dir',side_effect=uncertain_config_sync),patch.object(ui.W.QMessageBox,'warning',side_effect=lambda *args:(_ for _ in ()).throw(AssertionError(args[2]))):
+                dialog.findChild(ui.W.QDialogButtonBox).button(ui.W.QDialogButtonBox.Save).click()
+        modal(published_settings,window.settings)
+        assert storage.read_json(project.root/'cadgit.json')['open_targets']==[revised_target]
+        assert storage.read_json(project.root/'cadgit.json')['future_setting']=={'nested':[1,2]}
+        assert 'Injected settings sync warning' in window.statusBar().currentMessage()
+        assert 'Recovered app…' in [a.text() for a in window.open_menu.menu().actions()]
+        record('settings-published-sync-warning-retains-new-target-and-extensions')
+
         # Cancel naming/branching; invalid names fail; successful branch does not change main.
         before_main = project.config.get('main')
         with patch.object(ui.W.QInputDialog, 'getText', return_value=('unused', False)):
@@ -130,6 +166,25 @@ with tempfile.TemporaryDirectory(prefix='cadgit-dialog-workflows-') as temporary
             settle()
             assert {r['id'] for r in browser.library.records()} == before
             record('material-cancel-' + name)
+
+        # A validation exception must invalidate a previously usable selection.
+        emissions=[]
+        browser.materialSelected.connect(emissions.append)
+        for boundary in ['indexed','verify','thumbnail']:
+            browser.select_revision(material['id'])
+            assert browser._valid_selection and browser.use_button.isEnabled()
+            target=browser.library if boundary=='verify' else browser
+            with patch.object(target,boundary,side_effect=OSError('Injected selection read failure')):
+                browser.revision_selected()
+            assert not browser._valid_selection
+            assert all(not control.isEnabled() for control in [browser.use_button,browser.revise_button,browser.derive_button,browser.recombine_button])
+            browser.use_material()
+            assert not emissions
+            assert 'Injected selection read failure' in browser.status.text()
+            browser.select_revision(material['id'])
+            assert browser._valid_selection and browser.use_button.isEnabled()
+            record('material-selection-failure-recovery-'+boundary)
+        browser.materialSelected.disconnect(emissions.append)
 
         # Real material creation, revision and derivation through dialog buttons.
         def save_material(dialog):
@@ -253,6 +308,105 @@ with tempfile.TemporaryDirectory(prefix='cadgit-dialog-workflows-') as temporary
         assert project.resolve('main')['id'] == saved['id']
         record('save-partial-publication-surfaces-committed-id')
 
+        # Committed outcomes retain both sync and event-log warnings in the UI.
+        import cadgit.store as store
+        real_sync=store.fsync_dir
+        def fail_library_sync(path):
+            if Path(path)==browser.library.root/'revisions':raise OSError('Injected library directory sync failure')
+            return real_sync(path)
+        with patch.object(store,'fsync_dir',side_effect=fail_library_sync), patch.object(project,'event',side_effect=OSError('Injected audit event failure')):
+            warned=browser.library.create_material('Committed with warning')
+        browser.changed_record(warned)
+        assert warned['id'] in browser.status.text()
+        assert 'directory sync' in browser.status.text() and 'audit event' in browser.status.text()
+        assert browser.library.verify(warned['id'])['ok']
+        record('library-shows-accumulated-publication-warnings')
+        branch_source=project.records()[0]
+        with patch.object(project,'event',side_effect=OSError('Injected config event failure')):
+            window.activate_branch(branch_source['source'],branch_source.get('branch','main'))
+            assert 'config event failure' in window.statusBar().currentMessage()
+            record('activate-branch-publication-warning')
+            with patch.object(ui.W.QInputDialog,'getText',return_value=('warning-branch',True)):
+                window.create_branch(branch_source)
+            assert 'config event failure' in window.statusBar().currentMessage()
+            record('create-branch-publication-warning')
+            with patch.object(ui.W.QInputDialog,'getText',return_value=('Warning version',True)):
+                window.name_version(source)
+            assert 'config event failure' in window.statusBar().currentMessage()
+            record('name-version-publication-warning')
+            def choose_main():
+                menu=app.activePopupWidget()
+                try:
+                    assert isinstance(menu,ui.W.QMenu), 'Expected history context menu'
+                    next(action for action in menu.actions() if action.text()=='Set as main').trigger()
+                except BaseException as exc:callback_errors.append(repr(exc))
+                finally:
+                    if menu:menu.close()
+            ui.QtCore.QTimer.singleShot(50,choose_main)
+            window.history_menu(saved['id'],ui.QtCore.QPoint())
+            assert not callback_errors,callback_errors
+            assert 'config event failure' in window.statusBar().currentMessage()
+            assert project.resolve('main')['id']==saved['id']
+            record('context-main-shows-publication-warning')
+        warning_export=project.root/'exports/warning.usdz'
+        def fail_assembly_sync(path):
+            if Path(path)==project.root/'assemblies':raise OSError('Injected assembly directory sync failure')
+            return real_sync(path)
+        with patch.object(store,'fsync_dir',side_effect=fail_assembly_sync), patch.object(project,'event',side_effect=OSError('Injected assembly event failure')), patch.object(ui.W.QFileDialog,'getSaveFileName',return_value=(str(warning_export),'')):
+            window.save_assembly()
+            settle()
+        assert warning_export.exists() and project.verify(window.latest_assembly['id'])['ok']
+        assert 'assembly directory sync' in window.statusBar().currentMessage()
+        assert 'event log failed' in window.statusBar().currentMessage()
+        record('assembly-retains-sync-and-export-event-warnings')
+
+        # Exercise publication messages through real background completion paths.
+        incoming=project.stage_path(source)
+        with patch.object(ui.W.QFileDialog,'getOpenFileName',return_value=(str(incoming),'')),patch.object(ui.W.QInputDialog,'getText',return_value=('warningprobe',True)),patch.object(project,'event',side_effect=OSError('Injected ingest event warning')):
+            window.ingest_dialog();settle()
+        deadline=time.monotonic()+20
+        while window.current().load_state!='ready' and time.monotonic()<deadline:
+            app.processEvents();time.sleep(.01)
+        assert window.current().load_state=='ready'
+        assert 'Injected ingest event warning' in window.statusBar().currentMessage()
+        record('ingest-warning-survives-background-presentation')
+        window.current().selected={window.current().parts[0]['path']}
+        warned_stl=project.root/'exports/warning.stl'
+        with patch.object(ui.W.QFileDialog,'getSaveFileName',return_value=(str(warned_stl),'')),patch.object(ui.W.QMessageBox,'question',return_value=ui.W.QMessageBox.Yes),patch.object(project,'event',side_effect=OSError('Injected STL event warning')):
+            window.export_stl_dialog();settle()
+        assert warned_stl.exists() and 'Injected STL event warning' in window.statusBar().currentMessage(), (errors,window.statusBar().currentMessage())
+        record('stl-warning-visible-after-completion')
+        from cadgit.brep import list_jobs,verify_job
+        before_jobs=len(list_jobs(project));messages=[]
+        window.current().selected={window.current().parts[0]['path']}
+        def brep_message(dialog):messages.append(dialog.text());return ui.W.QMessageBox.Close
+        with patch.object(ui.W.QDialog,'exec',return_value=ui.W.QDialog.Accepted),patch.object(ui.W.QMessageBox,'exec',brep_message),patch.object(project,'event',side_effect=OSError('Injected B-rep event warning')):
+            window.prepare_brep_dialog();settle()
+        assert 'Injected B-rep event warning' in window.statusBar().currentMessage()
+        assert 'Injected B-rep event warning' in messages[-1]
+        assert len(list_jobs(project))==before_jobs+1 and all(verify_job(project,j['id'])['ok'] for j in list_jobs(project))
+        record('brep-warning-in-status-and-dialog')
+        with patch.object(ui.W.QDialog,'exec',return_value=ui.W.QDialog.Accepted),patch('cadgit.brep.prepare_job',side_effect=OSError('Injected B-rep precommit failure')):
+            window.prepare_brep_dialog();settle()
+        assert errors.pop()=='Injected B-rep precommit failure' and not window._brep_preparations
+        assert len(list_jobs(project))==before_jobs+1
+        with patch.object(ui.W.QDialog,'exec',return_value=ui.W.QDialog.Accepted),patch.object(ui.W.QMessageBox,'exec',brep_message):
+            window.prepare_brep_dialog();settle()
+        assert len(list_jobs(project))==before_jobs+2 and window._publication_notice is None
+        record('brep-failed-save-retry-clears-prior-warning')
+        # A handoff may publish successfully while durability and app launch fail.
+        handoff=project.root/'exports/warning-handoff.usdz'
+        target={'kind':'external','label':'Viewer','extension':'.usdz','command':['viewer','{usd}']}
+        def fail_handoff_sync(path):
+            if Path(path)==handoff.parent:raise OSError('Injected handoff sync warning')
+            return real_sync(path)
+        with patch.object(ui.W.QFileDialog,'getSaveFileName',return_value=(str(handoff),'')),patch.object(store,'fsync_dir',side_effect=fail_handoff_sync),patch('cadgit.handoff.subprocess.Popen',side_effect=OSError('Injected launch failure')):
+            window.open_target(target);settle()
+        assert handoff.exists() and Path(str(handoff)+'.cadgit.json').exists()
+        assert 'Injected handoff sync warning' in window.statusBar().currentMessage()
+        assert 'Injected launch failure' in window.statusBar().currentMessage()
+        record('handoff-retains-lineage-and-both-warning-outcomes')
+
         # Empty projects and multiple open projects keep drafts/history isolated.
         empty = ui.Project.init(Path(temporary) / 'empty')
         second = ui.Window(empty)
@@ -269,7 +423,19 @@ with tempfile.TemporaryDirectory(prefix='cadgit-dialog-workflows-') as temporary
             assert project.resolve(ref) == manifest
             assert project.verify(ref)['ok']
         assert not errors, errors
-        print(f'DIALOG_WORKFLOWS_VERIFIED: {len(cases)} cases; originals immutable')
     finally:
+        # close() hides these top-level widgets; it does not destroy their Qt
+        # children. Drain workers and deferred deletions while QApplication is
+        # alive, rather than leaving retained wrappers to Python finalization.
         window.close()
+        if second is not None:
+            second.close()
+        for pool in (ui.VIEWPORT_POOL, ui.QtCore.QThreadPool.globalInstance()):
+            assert pool.waitForDone(20_000), 'UI worker pool did not finish during cleanup'
         app.processEvents()
+        window.deleteLater()
+        if second is not None:
+            second.deleteLater()
+        ui.QtCore.QCoreApplication.sendPostedEvents(None, ui.QtCore.QEvent.DeferredDelete)
+        app.processEvents()
+    print(f'DIALOG_WORKFLOWS_VERIFIED: {len(cases)} cases; originals immutable; cleanup completed')

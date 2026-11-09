@@ -45,16 +45,16 @@ def cadgit_capture(trigger='user_save'):
         metadata={'imported_from':lineage.get('source_id'),'handoff_id':lineage.get('id'),'sequence':sequence,'captured_at':captured_at,'trigger':trigger,'native_capture':True,'native_path':bpy.data.filepath,'native_state_saved':trigger=='user_save','app_version':bpy.app.version_string,'warnings':warnings}
         (directory/'ready.tmp').write_text(json.dumps({'source':'blender','branch':json.loads((_cadgit_root/'cadgit.json').read_text()).get('active_branches',{}).get('blender','main'),'file':'scene.usda','label':pathlib.Path(bpy.data.filepath).stem or 'Blender snapshot','metadata':metadata}))
         os.replace(directory/'ready.tmp',directory/'ready.json')
-        print('CAD-GIT captured',event_id)
+        print('Git CAD captured',event_id)
     except Exception as exc:
         (directory/'failed.json').write_text(json.dumps({'source':'blender','error':str(exc),'traceback':traceback.format_exc()}))
-        print('CAD-GIT export failed:',exc)
+        print('Git CAD export failed:',exc)
 
 @persistent
 def cadgit_save_post(_unused): cadgit_capture('user_save')
 cadgit_save_post._cadgit_project=PROJECT
 previous_projects=sorted({h._cadgit_project for h in bpy.app.handlers.save_post if hasattr(h,'_cadgit_project') and h._cadgit_project!=PROJECT})
 bpy.app.handlers.save_post[:]=[h for h in bpy.app.handlers.save_post if not hasattr(h,'_cadgit_project')]
-if previous_projects:print('CAD-GIT switched Blender capture from '+', '.join(previous_projects)+' to '+PROJECT)
+if previous_projects:print('Git CAD switched Blender capture from '+', '.join(previous_projects)+' to '+PROJECT)
 bpy.app.handlers.save_post.append(cadgit_save_post)
-print('CAD-GIT save hook attached to Blender; project:',PROJECT)
+print('Git CAD save hook attached to Blender; project:',PROJECT)

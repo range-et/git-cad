@@ -189,3 +189,33 @@ fingerprint. Unmapped rows remain open coverage gaps, not blanket release blocke
 or requests for new product features. New proven defects belong in
 [issues.md](../issues.md); implemented test capabilities belong in
 [features.md](../features.md). Follow [build gates](BUILD_GATES.md).
+
+## Test-process shutdown regression (#14)
+
+The dialog suite also drains both worker pools with a finite timeout, explicitly
+flushes deferred destruction of its two windows, and emits success only after
+cleanup. This addresses a reproduced intermittent Qt wrapper finalization abort;
+it adds no action/state combinations to the catalog. A runner regression asserts
+that a success banner followed by exit -6 fails the gate and leaves later suites
+pending. [Evidence and limitations](REVIEW_TEST_VERIFICATION.md).
+
+### November 9 publication-failure additions (local campaign)
+
+`dialog_workflows.py` now includes 62 cases: library/config/context-main and
+assembly accumulated warnings; ingest warnings surviving asynchronous scene
+presentation; STL/B-rep completion warnings; B-rep failed-save/retry clearing the
+old warning; and handoff output/lineage preservation with both sync and launch
+failure messages. The latter uses a real USD package and injected launch failure,
+not a running native modeling application. Original histories are reverified
+before explicit Qt/worker cleanup. Whole-project coverage work remains #16.
+
+### Legacy window regression coverage
+
+`legacy_workflows.py` uses real Qt/VTK with a disposable generated project to
+exercise load/pick, draft persistence/move/preview, cancellation/rejection, save,
+Main selection, STL export, ingest and worker failure. Deferred-work probes assert
+that nested draft edits cannot change a queued recipe, publication warnings survive
+record loading, and a late draft preview cannot replace a newer record selection.
+Original archives are verified unchanged; explicit worker/widget cleanup precedes
+success. Native connectors and legacy launch accessibility remain separate gaps.
+The build and coverage runners include this ninth GUI suite.

@@ -62,8 +62,7 @@ def build_graph(snapshots, assemblies, config, main_id=None):
         if ref in pending:column=pending.index(ref)
         else:
             column=next((i for i,value in enumerate(pending) if value is None),len(pending))
-            if column==len(pending):pending.append(ref)
-            else:pending[column]=ref
+            if column==len(pending):pending.append(None)
         node['column']=column;column_count=max(column_count,column+1)
         pending[column]=None
         outgoing=sorted(parent_edges[ref],key=lambda edge:edge['kind']!='save')

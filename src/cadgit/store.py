@@ -2,7 +2,7 @@ from __future__ import annotations
 import contextlib, datetime as dt, fcntl, hashlib, json, os, shutil, uuid,sys
 from pathlib import Path
 
-from .errors import CadgitError
+from .errors import CadgitError,PublishedWriteError
 from .compatibility import check_compatibility
 
 def now():
@@ -19,6 +19,7 @@ def atomic_write(path, data, replace=True):
     """Publish complete bytes atomically; no-replace publication never clobbers."""
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     temporary=path.with_name(f'.{path.name}.{uuid.uuid4().hex}.tmp')
+    published=False
     try:
         with temporary.open('xb') as file:
             file.write(data);file.flush();os.fsync(file.fileno())
@@ -26,8 +27,16 @@ def atomic_write(path, data, replace=True):
         else:
             try:os.link(temporary,path)
             except FileExistsError:raise CadgitError(f'Output already exists: {path}')
+        published=True
         fsync_dir(path.parent)
-    finally:temporary.unlink(missing_ok=True)
+    except OSError as exc:
+        if published:raise PublishedWriteError(str(path),exc) from exc
+        raise
+    finally:
+        try:temporary.unlink(missing_ok=True)
+        except OSError as exc:
+            if published:raise PublishedWriteError(str(path),exc) from exc
+            raise
 
 
 def atomic_json(path,value,replace=True):
@@ -38,13 +47,22 @@ def publish_file(source,destination):
     """Copy through a destination-local temporary file, then publish exclusively."""
     destination=Path(destination).expanduser().absolute();destination.parent.mkdir(parents=True,exist_ok=True)
     temporary=destination.with_name(f'.{destination.name}.{uuid.uuid4().hex}.tmp')
+    published=False
     try:
         with Path(source).open('rb') as src,temporary.open('xb') as dst:
             shutil.copyfileobj(src,dst);dst.flush();os.fsync(dst.fileno())
         try:os.link(temporary,destination)
         except FileExistsError:raise CadgitError(f'Output already exists: {destination}')
+        published=True
         fsync_dir(destination.parent)
-    finally:temporary.unlink(missing_ok=True)
+    except OSError as exc:
+        if published:raise PublishedWriteError(str(destination),exc) from exc
+        raise
+    finally:
+        try:temporary.unlink(missing_ok=True)
+        except OSError as exc:
+            if published:raise PublishedWriteError(str(destination),exc) from exc
+            raise
     return destination
 
 
@@ -94,7 +112,7 @@ class Project:
     def __init__(self, root):
         self.root = Path(root).expanduser().resolve()
         if not (self.root / "cadgit.json").exists():
-            raise CadgitError(f"No CAD-GIT project at {self.root}. Run cad-git init first.")
+            raise CadgitError(f"No Git CAD project at {self.root}. Run git-cad init first.")
         self.record_issues={}
         self.config = read_json(self.root / "cadgit.json")
         check_compatibility(self.config,"Project config")
@@ -131,7 +149,7 @@ class Project:
             stage=Usd.Stage.CreateNew(str(prepared/'main/empty.usda'));world=UsdGeom.Xform.Define(stage,'/World');stage.SetDefaultPrim(world.GetPrim())
             UsdGeom.SetStageUpAxis(stage,'Z');UsdGeom.SetStageMetersPerUnit(stage,1.0);stage.GetRootLayer().Save();del stage
             atomic_write(prepared/'main/scene.usda',b'#usda 1.0\n( upAxis = "Z"\n metersPerUnit = 1\n defaultPrim = "World"\n subLayers = [@./empty.usda@] )\n')
-            atomic_json(prepared/'mcp.example.json',{'mcpServers':{'cad-git':{'command':sys.executable,'args':['-m','cadgit.cli','--project',str(root),'mcp']}}})
+            atomic_json(prepared/'mcp.example.json',{'mcpServers':{'git-cad':{'command':sys.executable,'args':['-m','cadgit.cli','--project',str(root),'mcp']}}})
             config={'schema_version':1,'schema_minor':0,'required_features':[],'extensions':{},'id':uid('project'),'name':name or root.name,'sources':['rhino','blender'],'material_policy':'native_asset_with_portable_fallback'}
             event_id=now().replace(':','-')+'_'+uid('evt')
             atomic_json(prepared/'history/events'/(event_id+'.json'),{'schema_version':1,'id':event_id,'created_at':now(),'kind':'project_initialized','data':{'project_id':config['id']}})
@@ -249,10 +267,12 @@ class Project:
             if path.is_file():
                 with path.open("rb") as f: os.fsync(f.fileno())
         destination.parent.mkdir(parents=True, exist_ok=True)
-        os.replace(staging, destination); fsync_dir(destination.parent)
+        os.replace(staging, destination)
         result={**record,'_directory':str(destination)}
+        try:fsync_dir(destination.parent)
+        except OSError as exc:result['publication_warning']='Record committed; directory sync could not be confirmed: '+str(exc)
         try:self.event('record_committed',{'id':record['id'],'path':str(destination.relative_to(self.root))})
-        except OSError as exc:result['publication_warning']='Record committed; event could not be written: '+str(exc)
+        except OSError as exc:result['publication_warning']=result.get('publication_warning','')+' Record committed; event could not be written: '+str(exc)
         return result
 
     def ingest(self, filepath, source="manual", label=None, branch=None, metadata=None):
@@ -267,10 +287,25 @@ class Project:
             branch=branch or read_json(self.root/'cadgit.json').get('active_branches',{}).get(source,'main')
             if not branch or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in branch):raise CadgitError('Invalid branch name')
             existing=self.records();capture_id=(metadata or {}).get('capture_id')
+            if capture_id is not None and (not isinstance(capture_id,str) or not capture_id):raise CadgitError('Capture identity must be a nonempty string')
             if capture_id:
                 repeated=next((r for r in existing if r.get('source')==source and r.get('metadata',{}).get('capture_id')==capture_id),None)
-                if repeated:return repeated
+                if repeated:
+                    if not self.verify(repeated)['ok']:raise CadgitError('Existing capture failed integrity verification; preserve the source and repair its history before retrying')
+                    return repeated
+            imported=(metadata or {}).get('imported_from')
+            if imported is not None:
+                if not isinstance(imported,str) or not imported:raise CadgitError('Imported source must pin an exact revision ID')
+                origin=self.resolve(imported)
+                if origin['id']!=imported:raise CadgitError('Imported source must pin an exact revision ID')
+                if not self.verify(origin)['ok']:raise CadgitError('Imported source failed integrity verification')
             tip=branch_tip(existing,source,branch)
+            parent=tip['id'] if tip else read_json(self.root/'cadgit.json').get('branches',{}).get(source,{}).get(branch,{}).get('base')
+            if parent:
+                previous=tip or self.resolve(parent)
+                if previous['id']!=parent:raise CadgitError('Branch base must pin an exact revision ID')
+                if not previous['id'].startswith('snap_') or previous.get('source')!=source:raise CadgitError('Save parent must be a snapshot of the same source')
+                if not self.verify(previous)['ok']:raise CadgitError('Parent revision failed integrity verification; source capture preserved for recovery')
             sid = uid("snap"); staging = self.root / ".cadgit/staging" / sid; staging.mkdir()
             try:
                 source_layer = Sdf.Layer.FindOrOpen(str(filepath))
@@ -284,12 +319,15 @@ class Project:
                 meta = dict(metadata or {})
                 material_files = sorted(filepath.parent.glob("material_*.blend")) if meta.get("native_capture") else []
                 native_materials = {}
+                material_warnings = []
                 mapping_path = filepath.parent / "materials.json"
                 mapping = read_json(mapping_path) if material_files and mapping_path.exists() else {}
                 for path in material_files:
                     entry = mapping.get(path.name, path.stem)
                     if isinstance(entry, str): entry = {"name": entry, "images": {}}
-                    image_inputs = {name: Path(filename) for name, filename in entry.get("images", {}).items() if Path(filename).is_file()}
+                    image_inputs = {name: Path(filename) for name, filename in entry.get("images", {}).items()}
+                    for filename in image_inputs.values():
+                        if not filename.is_file():raise CadgitError("Missing captured image: "+str(filename))
                     image_hashes = {name: hashlib.sha256(filename.read_bytes()).hexdigest() for name, filename in image_inputs.items()}
                     digest = hashlib.sha256(path.read_bytes() + json.dumps(image_hashes, sort_keys=True).encode()).hexdigest()
                     mid = "mat_" + digest[:20]
@@ -302,11 +340,13 @@ class Project:
                             relative = "images/" + image_hashes[image_name][:16] + filename.suffix
                             target = ms / relative; target.parent.mkdir(exist_ok=True)
                             shutil.copy2(filename, target); image_map[image_name] = relative
-                        material_record = {"schema_version": 1, "id": mid, "created_at": now(), "label": entry["name"], "provider": "blender", "snapshot_id": sid, "entry_layer": "material.blend", "images": image_map}
-                        self.commit(ms, material_dir, material_record)
+                        material_record = {"schema_version": 1, "id": mid, "created_at": now(), "label": entry["name"], "provider": "blender", "capture_attempt_id": sid, "entry_layer": "material.blend", "images": image_map}
+                        material_result=self.commit(ms, material_dir, material_record)
+                        if material_result.get("publication_warning"):
+                            material_warnings.append(f"Material {mid}: "+material_result["publication_warning"])
                     native_materials[entry["name"]] = mid
                 meta["native_materials"] = native_materials
-                r = Snapshot(id=sid, source=source, branch=branch, parent=tip["id"] if tip else read_json(self.root / "cadgit.json").get("branches", {}).get(source, {}).get(branch, {}).get("base"), created_at=timestamp, committed_at=now(),commit_sequence=max((r.get("commit_sequence",0) or 0 for r in existing),default=0)+1, label=label or filepath.stem, trigger=meta.pop("trigger", "ingest"), metadata=meta).model_dump()
+                r = Snapshot(id=sid, source=source, branch=branch, parent=parent, created_at=timestamp, committed_at=now(),commit_sequence=max((r.get("commit_sequence",0) or 0 for r in existing),default=0)+1, label=label or filepath.stem, trigger=meta.pop("trigger", "ingest"), metadata=meta).model_dump()
                 from .library import Library,FEATURE
                 from pxr import UsdGeom,UsdShade,Tf
                 library_bindings=[];native_bindings=[];native_by_prim={};aliases={}
@@ -351,7 +391,12 @@ class Project:
                 r['metadata']['native_materials_by_prim']=native_by_prim
                 if library_bindings:r.update(library_bindings=library_bindings,required_features=[FEATURE])
                 dest = self.root / "history/sources" / source / (r["created_at"].replace(":", "-") + "_" + sid)
-                return self.commit(staging, dest, r)
+                result=self.commit(staging, dest, r)
+                if material_warnings:
+                    warnings=[*material_warnings]
+                    if result.get("publication_warning"):warnings.append(result["publication_warning"])
+                    result={**result,"publication_warning":"; ".join(warnings)}
+                return result
             except Exception as e:
                 try:self.event("export_failed", {"id": sid, "error": str(e), "staging": str(staging)})
                 except OSError:pass
@@ -381,19 +426,54 @@ class Project:
             pointer=self.root/'main/current.json';scene=self.root/'main/scene.usda'
             current=read_json(pointer) if pointer.exists() else {};check_compatibility(current,'Main pointer',legacy=True)
             before=scene.read_bytes() if scene.exists() else None
+            selected={**current,'assembly_id':record['id'],'selected_at':now()}
             try:
                 atomic_write(scene,self.main_scene_bytes(record))
-                atomic_json(pointer,{**current,'assembly_id':record['id'],'selected_at':now()})
-            except Exception:
-                # If rollback itself fails, the unchanged pointer repairs its USD
-                # projection when the project is reopened.
-                if before is not None:
-                    try:atomic_write(scene,before)
-                    except OSError:pass
-                raise
+                atomic_json(pointer,selected)
+            except Exception as exc:
+                # Atomic publication can succeed before its directory sync fails.
+                # The pointer is authoritative: never undo the matching scene or
+                # report an uncommitted operation after that exact value appeared.
+                if isinstance(exc,PublishedWriteError) and Path(exc.destination)==pointer:
+                    published=True
+                else:
+                    try:published=read_json(pointer)==selected
+                    except CadgitError as read_error:
+                        if isinstance(read_error.__cause__,FileNotFoundError):published=False
+                        else:raise CadgitError('Main selection outcome is uncertain; reopen the project before retrying. '+str(exc)+'; '+str(read_error)) from exc
+                if published:
+                    record={**record,'publication_warning':'Main selected; publication durability could not be confirmed: '+str(exc)}
+                else:
+                    # If rollback fails, the unchanged pointer repairs its USD
+                    # projection when the project is reopened.
+                    if before is not None:
+                        try:atomic_write(scene,before)
+                        except OSError:pass
+                    else:
+                        try:scene.unlink(missing_ok=True)
+                        except OSError:pass
+                    raise
             try:self.event('main_selected',{'assembly_id':record['id']})
-            except OSError as exc:record={**record,'publication_warning':'Main selected; event could not be written: '+str(exc)}
+            except OSError as exc:record={**record,'publication_warning':record.get('publication_warning','')+' Main selected; event could not be written: '+str(exc)}
         return record
+
+    def _publish_config(self, config, result, event_kind, event_data):
+        """Keep reported state and audit events behind the atomic commit point."""
+        path=self.root/'cadgit.json'
+        try:atomic_json(path,config)
+        except Exception as exc:
+            if isinstance(exc,PublishedWriteError) and Path(exc.destination)==path:
+                published=True
+            else:
+                try:published=read_json(path)==config
+                except CadgitError as read_error:
+                    raise CadgitError('Configuration save outcome is uncertain; reopen the project before retrying. '+str(exc)+'; '+str(read_error)) from exc
+            if not published:raise
+            result={**result,'publication_warning':'Configuration saved; publication durability could not be confirmed: '+str(exc)}
+        self.config=config
+        try:self.event(event_kind,event_data)
+        except OSError as exc:result={**result,'publication_warning':result.get('publication_warning','')+' Configuration saved; event could not be written: '+str(exc)}
+        return result
 
     def branch(self, source, name, base=None, activate=False):
         if not name or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in name):
@@ -409,10 +489,10 @@ class Project:
             elif name not in branches:
                 branches[name] = {"base": None}
             if activate: config.setdefault("active_branches", {})[source] = name
-            self.event("branch_selected" if activate else "branch_created", {"source": source, "name": name, "base": branches[name]["base"]})
-            atomic_json(self.root / "cadgit.json", config)
-            self.config = config
-            return {"source": source, "branch": name, "base": branches[name]["base"], "active": activate}
+            return self._publish_config(config,
+                {"source": source, "branch": name, "base": branches[name]["base"], "active": activate},
+                "branch_selected" if activate else "branch_created",
+                {"source": source, "name": name, "base": branches[name]["base"]})
 
     def name_version(self,ref,name):
         name=name.strip()
@@ -422,9 +502,8 @@ class Project:
             config=read_json(self.root/'cadgit.json');versions=config.setdefault('versions',{})
             if name in versions:raise CadgitError('Version name already exists; choose a new name')
             versions[name]=record['id']
-            self.event('version_named',{'name':name,'snapshot_id':record['id']})
-            atomic_json(self.root/'cadgit.json',config);self.config=config
-        return {'name':name,'snapshot_id':record['id']}
+            result={'name':name,'snapshot_id':record['id']}
+            return self._publish_config(config,result,'version_named',result)
 
     def verify(self, ref, _stack=None):
         if isinstance(ref,dict):record=ref
@@ -438,14 +517,15 @@ class Project:
             if (self.root/'artifacts').is_symlink() or collection.is_symlink() or directory.is_symlink() or directory.name!=ref or not directory.resolve().is_relative_to(collection.resolve()):
                 raise CadgitError('Unsafe print artifact archive: '+ref)
         else:record=self.resolve(ref)
-        errors=[];base=Path(record['_directory']).resolve()
-        stack=set(_stack or ())
-        if record['id'] in stack:return {'id':record['id'],'ok':False,'errors':['Cyclic asset dependency']}
-        stack.add(record['id'])
+        from .verification import verify_dependencies
+        return verify_dependencies(self,record,ancestors=_stack)
+
+    def _verify_local(self,record):
+        errors=[];dependencies=[];base=Path(record['_directory']).resolve()
         try:entry=self.stage_path(record).relative_to(base).as_posix()
         except CadgitError as exc:errors.append(str(exc));entry=None
         files=record.get('files')
-        if not isinstance(files,list):return {'id':record.get('id'),'ok':False,'errors':['Missing files inventory']}
+        if not isinstance(files,list):return ['Missing files inventory'],[]
         listed=set()
         for file in files:
             if not isinstance(file,dict):errors.append('Invalid file inventory entry');continue
@@ -478,16 +558,40 @@ class Project:
         native=record.get('metadata',{}).get('native_materials',{})
         if not isinstance(native,dict) or any(not isinstance(value,str) for value in native.values()):errors.append('Invalid native material map')
         else:revisions.update(native.values())
-        if revisions:
-            materials={material['id']:material for material in self.records('materials',strict=False)}
-            for revision in revisions:
-                if revision not in materials:errors.append('Missing or incompatible material revision: '+str(revision));continue
-                result=self.verify(materials[revision],stack)
-                if not result['ok']:errors.append('Material '+str(revision)+': '+'; '.join(result['errors']))
-        if record.get('library_bindings'):
-            from .library import Library
-            library=Library(self)
-            for binding in record['library_bindings']:
-                result=library.verify(binding['library_material_revision'])
-                if not result['ok']:errors.append('Library material: '+'; '.join(result['errors']))
-        return {'id':record['id'],'ok':not errors,'errors':errors}
+        dependencies.extend(('material',revision,'Material') for revision in sorted(revisions))
+        # Saved scene lineage is an exact pinned relationship, not a prefix or
+        # a best-effort hint. Archive usability and intact history are distinct.
+        links=[]
+        if record['id'].startswith('snap_'):
+            if record.get('parent'):links.append(('parent',record['parent']))
+            imported=record.get('metadata',{}).get('imported_from')
+            if imported:links.append(('imported_from',imported))
+        if record['id'].startswith('assembly_'):
+            selections=record.get('selections',[])
+            if not isinstance(selections,list):errors.append('Invalid assembly selections');selections=[]
+            for selection in selections:
+                if not isinstance(selection,dict):errors.append('Invalid assembly selection');continue
+                links.append(('selection',selection.get('snapshot_id')))
+            if 'recipe.json' in listed:
+                try:
+                    recipe=read_json(base/'recipe.json')
+                    if not isinstance(recipe,dict):raise CadgitError('Assembly recipe must be an object')
+                    for field in ('selections','bindings','library_bindings'):
+                        serialized=json.loads(json.dumps(record.get(field,[]),allow_nan=False))
+                        if recipe.get(field,[])!=serialized:errors.append('Assembly '+field+' differs from its hashed recipe')
+                except (CadgitError,ValueError,TypeError) as exc:errors.append(str(exc))
+        checked_links=set()
+        for role,revision in links:
+            if not isinstance(revision,str):
+                errors.append('Invalid '+role+' revision reference');continue
+            if (role,revision) in checked_links:continue
+            checked_links.add((role,revision))
+            dependencies.append(('scene',revision,role))
+        library_bindings=record.get('library_bindings',[])
+        if not isinstance(library_bindings,list):errors.append('Invalid library material bindings')
+        else:
+            for binding in library_bindings:
+                if not isinstance(binding,dict) or not isinstance(binding.get('library_material_revision'),str) or not binding['library_material_revision']:
+                    errors.append('Invalid library material revision reference');continue
+                dependencies.append(('library',binding['library_material_revision'],'Library material'))
+        return errors,dependencies

@@ -22,7 +22,7 @@ def wait():
     raise AssertionError('Library/geometry work did not complete')
 QTest.qWait(140);wait();browser=window.library_browser
 try:
-    assert app.applicationName()=='cad-git'
+    assert app.applicationName()=='git-cad'
     current=window.current();current.selected={current.parts[0]['path']};window.add_selection();original=copy.deepcopy(window.draft)
     material=next(r for r in lib.records() if r['label']=='PLA + blue surface')
     window.workspace_tabs.setCurrentIndex(1);browser.select_revision(material['id']);app.processEvents()
@@ -66,5 +66,5 @@ try:
     finally:W.QDialog.exec=old_exec
     assert 'import stopped' in browser.status.text() and 'successful IDs' in browser.status.text()
     assert not errors,errors
-    print('MATERIAL_LIBRARY_UI_VERIFIED: per-project browser, revisions, editor losslessness, filter safety, material assignment, partial import, cad-git app identity')
+    print('MATERIAL_LIBRARY_UI_VERIFIED: per-project browser, revisions, editor losslessness, filter safety, material assignment, partial import, git-cad app identity')
 finally:window.close();app.processEvents()

@@ -1,4 +1,4 @@
-# CAD-GIT
+# Git CAD
 
 A fully local USD snapshot history and assembly tool implemented in Python.
 Rhino and Blender keep their normal working files. Each tracked save exports a
@@ -15,7 +15,7 @@ separate engineering data, with all assignments pinned to exact revisions.
 
 Source histories advance independently. Main changes only when the user chooses a
 saved assembly. Native applications can import that result and continue working;
-CAD-GIT does not automatically rewrite or synchronize their native documents.
+Git CAD does not automatically rewrite or synchronize their native documents.
 AI agents are optional, and all required work happens locally through CLI/UI.
 
 ## Project tracking
@@ -28,12 +28,12 @@ AI agents are optional, and all required work happens locally through CLI/UI.
 
 ```sh
 uv sync --extra dev --extra mcp
-uv run cad-git demo demo-project
-uv run cad-git --project demo-project ui
+uv run git-cad demo demo-project
+uv run git-cad --project demo-project ui
 ```
 
-On this Mac, double-click **Open CAD-GIT.command** to open the existing demo.
-The app uses a bundled CAD-GIT cube/history icon for its window and macOS Dock.
+On this Mac, double-click **Open Git CAD.command** to open the existing demo.
+The app uses a bundled Git CAD cube/history icon for its window and macOS Dock.
 Its editable SVG and PNG/ICNS assets live in `src/cadgit/resources/`;
 run `uv run python scripts/build_icon.py` to regenerate the raster assets.
 The initial engine studies are generated sample geometry, identified in their
@@ -65,15 +65,15 @@ application. An AI agent is not required; the CLI talks to the listeners directl
 The current reference integrations target macOS and use a POSIX local service lock.
 
 ```sh
-uv run cad-git init /path/to/project
-uv run cad-git -p /path/to/project begin --rhino-endpoint http://127.0.0.1:10500/
-uv run cad-git -p /path/to/project ingest scene.usdz --source blender
-uv run cad-git -p /path/to/project log --source blender
-uv run cad-git -p /path/to/project snapshot --source rhino
-uv run cad-git -p /path/to/project import main --app blender --output source/new-study.blend
-uv run cad-git -p /path/to/project export main --output print.stl --units mm
-uv run cad-git -p /path/to/project autosnapshot on --interval 300
-uv run cad-git -p /path/to/project stop
+uv run git-cad init /path/to/project
+uv run git-cad -p /path/to/project begin --rhino-endpoint http://127.0.0.1:10500/
+uv run git-cad -p /path/to/project ingest scene.usdz --source blender
+uv run git-cad -p /path/to/project log --source blender
+uv run git-cad -p /path/to/project snapshot --source rhino
+uv run git-cad -p /path/to/project import main --app blender --output source/new-study.blend
+uv run git-cad -p /path/to/project export main --output print.stl --units mm
+uv run git-cad -p /path/to/project autosnapshot on --interval 300
+uv run git-cad -p /path/to/project stop
 ```
 
 CLI output paths are relative to the current shell directory. `--project` selects
@@ -111,10 +111,10 @@ Physical values require units and sources; unknown values remain unspecified.
 than providing an authenticated catalog integration.
 
 ```sh
-uv run cad-git -p /path/to/project library list
-uv run cad-git -p /path/to/project library import /path/to/color.png --kind image
-uv run cad-git -p /path/to/project library show REVISION_ID
-uv run cad-git -p /path/to/project library verify REVISION_ID
+uv run git-cad -p /path/to/project library list
+uv run git-cad -p /path/to/project library import /path/to/color.png --kind image
+uv run git-cad -p /path/to/project library show REVISION_ID
+uv run git-cad -p /path/to/project library verify REVISION_ID
 ```
 
 See the [implemented scope and limits](docs/MATERIAL_LIBRARY_V1.md) and
@@ -127,7 +127,7 @@ project/
   cadgit.json                  # project settings and active capture branches
   source/                      # ordinary editable native working files
     study.blend
-    study.blend.cadgit.json    # ancestry of a CAD-GIT-created working file
+    study.blend.cadgit.json    # ancestry of a Git CAD-created working file
   history/
     sources/<app>/<snapshot>/  # immutable manifests and self-contained scene.usdz
     events/                    # main selections, branches, handoffs, failures
@@ -159,15 +159,15 @@ The format evolves additively: new optional parameters preserve existing IDs, me
 ## Optional B-rep jobs
 
 **Prepare B-rep job…** archives per-part mesh inputs and lineage from a saved
-version for future DualBrep reconstruction. `cad-git brep prepare` provides the
-same workflow; `cad-git brep doctor` checks a separately configured CUDA runtime.
+version for future DualBrep reconstruction. `git-cad brep prepare` provides the
+same workflow; `git-cad brep doctor` checks a separately configured CUDA runtime.
 This release prepares inputs only: no model inference or STEP generation is
 enabled yet. Preparation works without CUDA; Apple Silicon inference requires a
 backend port and validation. See [setup, limitations and the Metal port plan](docs/DUALBREP.md).
 
 Reconstruction itself is outside the core product scope. The separate
 [DualBrep fork](https://github.com/range-et/DualBrep) may provide an optional Docker
-service later; CAD-GIT would submit jobs and track results, or report that no
+service later; Git CAD would submit jobs and track results, or report that no
 compatible runtime is available. That service integration is not implemented yet.
 
 ## Current boundaries
@@ -198,12 +198,15 @@ three-agent pass, including inherited UVs, initialization failures and preview d
 
 Follow [build/review gates](docs/BUILD_GATES.md) and the repository's
 [agent instructions](AGENTS.md). The repeatable candidate check is
-`uv run python scripts/check.py --build --ui --mcp` in a graphical session
+`uv run python scripts/check.py --build --ui --mcp --mutation` in a graphical session
 with the development and MCP extras installed.
 The [UX action/state matrix](docs/UX_TEST_MATRIX.md) tracks tested workflows and
 explicit coverage gaps. It records per-check logs and a JSON report under ignored `build/qa/`.
-CI runs core/build gates; independent reviews and applicable GUI/native checks
+CI runs scoped static, core/build, MCP and compatibility mutation gates; independent reviews and applicable GUI/native checks
 are recorded separately using the [review template](docs/REVIEW_TEMPLATE.md).
+
+See [layered verification](docs/TEST_VERIFICATION.md) for generated-input domains,
+snapshot review, mutation thresholds and remaining limits.
 
 ```sh
 uv run pytest -q
@@ -237,3 +240,10 @@ permissions require a separate license from the copyright holder.
 This is source-available software. The license does not require disclosure of
 source code for distributed modifications. See [LICENSE](LICENSE) for the full
 terms.
+
+The canonical distribution and command are `git-cad`, matching
+[range-et/git-cad](https://github.com/range-et/git-cad). The `cad-git` command and
+old launcher remain compatibility aliases. Existing `cadgit` Python imports,
+project/archive names, `cadgit.json`, `.cadgit`, sidecars and saved UI settings
+retain their identifiers; no history migration is required. The portable skill
+remains at its compatibility path `skills/cad-git/`, with Git CAD instructions.

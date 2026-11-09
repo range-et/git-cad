@@ -5,13 +5,14 @@ from pathlib import Path
 RESOURCES=Path(__file__).parent/'resources'
 
 
-def configure_application_identity(name='cad-git'):
+def configure_application_identity(name='git-cad'):
+    display='Git CAD' if name=='git-cad' else name
     if sys.platform=='darwin':
         try:
             from Foundation import NSBundle,NSProcessInfo
             info=NSBundle.mainBundle().infoDictionary()
             if info is not None:
-                info['CFBundleName']=name;info['CFBundleDisplayName']=name
+                info['CFBundleName']=display;info['CFBundleDisplayName']=display
             NSProcessInfo.processInfo().setProcessName_(name)
         except ImportError:
             # Other Python distributions may not include PyObjC. Qt's own name
@@ -19,8 +20,8 @@ def configure_application_identity(name='cad-git'):
             pass
     from PySide6 import QtCore,QtGui
     QtCore.QCoreApplication.setApplicationName(name)
-    QtGui.QGuiApplication.setApplicationDisplayName(name)
-    QtGui.QGuiApplication.setDesktopFileName('cad-git')
+    QtGui.QGuiApplication.setApplicationDisplayName(display)
+    QtGui.QGuiApplication.setDesktopFileName('git-cad')
 
 
 def configure_application_icon(app):

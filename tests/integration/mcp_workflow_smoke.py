@@ -9,6 +9,7 @@ import asyncio
 from datetime import timedelta
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -54,13 +55,14 @@ async def exercise(root):
     called = set()
     server = StdioServerParameters(
         command=sys.executable,
+        env={key:value for key,value in os.environ.items() if key.startswith('COVERAGE_')},
         args=['-m', 'cadgit.cli', '--project', str(project.root), 'mcp'],
     )
     with (root / 'server.log').open('w') as server_log:
         async with stdio_client(server, errlog=server_log) as (read, write):
             async with ClientSession(read, write, read_timeout_seconds=timedelta(seconds=30)) as session:
                 initialized = await session.initialize()
-                assert initialized.serverInfo.name == 'CAD-GIT'
+                assert initialized.serverInfo.name == 'Git CAD'
                 assert initialized.capabilities.tools is not None
                 cases.append('MCP-01 initialize')
                 discovered = {tool.name for tool in (await session.list_tools()).tools}

@@ -1,4 +1,4 @@
-"""Scrollable, connected commit graph for the CAD-GIT workbench."""
+"""Scrollable, connected commit graph for the Git CAD workbench."""
 from PySide6 import QtCore,QtGui,QtWidgets as W
 
 COLORS=['#D59D48','#4CA6D6','#AD8CD7','#65B99E','#D97989','#A4B862']

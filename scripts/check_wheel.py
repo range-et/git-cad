@@ -1,4 +1,4 @@
-"""Inspect an installed wheel without resolving CAD-GIT from the source tree."""
+"""Inspect an installed wheel without resolving Git CAD from the source tree."""
 from pathlib import Path
 import importlib,sys
 from importlib.metadata import distributions
@@ -12,9 +12,18 @@ resources=Path(cadgit.__file__).parent/'resources'
 for name in ('blender_hook.py','rhino_hook.py','monad_colors.json','MONAD_LICENSE.txt',
              'cad-git.svg','cad-git.png','cad-git.icns','brep_job_readme.txt'):
     assert (resources/name).is_file(),name
-sys.argv=['cad-git','--help']
-entries=[entry for distribution in distributions(path=[str(installed)])
-         for entry in distribution.entry_points
-         if entry.group=='console_scripts' and entry.name=='cad-git']
-assert len(entries)==1,'Wheel must declare exactly one cad-git console entry point'
-entries[0].load()()
+installed_distributions=list(distributions(path=[str(installed)]))
+project=[distribution for distribution in installed_distributions
+         if distribution.metadata['Name']=='git-cad']
+assert len(project)==1,'Wheel distribution must be named git-cad'
+for command in ('git-cad','cad-git'):
+    entries=[entry for distribution in installed_distributions
+             for entry in distribution.entry_points
+             if entry.group=='console_scripts' and entry.name==command]
+    assert len(entries)==1,f'Wheel must declare exactly one {command} console entry point'
+    assert entries[0].value=='cadgit.cli:main',entries[0].value
+    sys.argv=[command,'--help']
+    try:
+        entries[0].load()()
+    except SystemExit as exc:
+        assert exc.code in (None,0),exc.code

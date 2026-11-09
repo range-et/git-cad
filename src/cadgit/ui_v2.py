@@ -158,12 +158,12 @@ class SnapshotTab(W.QWidget):
 class Window(W.QMainWindow):
     def __init__(self,project,screenshot=None):
         super().__init__();self.project=project;self._closing=False;self._saving_assembly=False;self.jobs=[];self.draft=[];self.tabs_by_id={};self.light=False;self.screenshot=screenshot;self.latest_assembly=None
-        self.setWindowTitle('CAD-GIT • '+project.config['name']);self.resize(1470,960);self.setMinimumSize(1000,640);self.colors=theme(W.QApplication.instance())
+        self.setWindowTitle('Git CAD • '+project.config['name']);self.resize(1470,960);self.setMinimumSize(1000,640);self.colors=theme(W.QApplication.instance())
         root=W.QWidget();self.setCentralWidget(root);layout=W.QVBoxLayout(root);layout.setContentsMargins(16,14,16,8);layout.setSpacing(10)
-        header=W.QHBoxLayout();header.addWidget(label('CAD—GIT','brand'));header.addSpacing(18);header.addWidget(label(project.config['name'],'title'));header.addStretch()
+        header=W.QHBoxLayout();header.addWidget(label('Git CAD','brand'));header.addSpacing(18);header.addWidget(label(project.config['name'],'title'));header.addStretch()
         self.add_usd_button=tip(button('+ Add USD file…',self.ingest_dialog),'Record a whole USD file as an immutable version. Its meshes can then be selected in a tab.');header.addWidget(self.add_usd_button)
         self.watch_button=tip(button('Watch native saves…',self.connect_apps),'Attach the installed application adapters. Normal native saves create full USD snapshots.');header.addWidget(self.watch_button)
-        self.open_menu=W.QToolButton();self.open_menu.setText('Open with…');self.open_menu.setPopupMode(W.QToolButton.InstantPopup);tip(self.open_menu,'Create a new native file from the current USD. Applications do not need to understand CAD-GIT history.');header.addWidget(self.open_menu)
+        self.open_menu=W.QToolButton();self.open_menu.setText('Open with…');self.open_menu.setPopupMode(W.QToolButton.InstantPopup);tip(self.open_menu,'Create a new native file from the current USD. Applications do not need to understand Git CAD history.');header.addWidget(self.open_menu)
         header.addWidget(tip(button('Settings',self.settings),'Configure external application targets and the light/dark theme.'));layout.addLayout(header)
         self.workbench_splitter=W.QSplitter(QtCore.Qt.Vertical);self.workbench_splitter.setChildrenCollapsible(False);layout.addWidget(self.workbench_splitter,1)
         splitter=W.QSplitter(QtCore.Qt.Horizontal);self.columns_splitter=splitter;splitter.setChildrenCollapsible(False);self.workbench_splitter.addWidget(splitter)
@@ -294,7 +294,7 @@ class Window(W.QMainWindow):
             self.update_actions();self.fail(error)
         j.signals.done.connect(complete);j.signals.error.connect(failed);(pool or QtCore.QThreadPool.globalInstance()).start(j)
     def fail(self,message):
-        if not self._closing:self.statusBar().showMessage(str(message));W.QMessageBox.warning(self,'CAD-GIT',str(message))
+        if not self._closing:self.statusBar().showMessage(str(message));W.QMessageBox.warning(self,'Git CAD',str(message))
     def tab_is_open(self,tab):
         if self._closing or getattr(tab,'closed',False):return False
         try:return self.tabs.indexOf(tab)>=0
@@ -362,10 +362,15 @@ class Window(W.QMainWindow):
         r=self.selected_record()
         if r:self.name_version(r)
         else:self.fail('Select a saved version in the graph first.')
+    def publication_status(self,result,message):
+        text=message+(' • '+result['publication_warning'] if result.get('publication_warning') else '')
+        self._publication_notice=text if result.get('publication_warning') else None
+        self.statusBar().showMessage(text)
     def name_version(self,r):
         name,ok=W.QInputDialog.getText(self,'Name version','Version name:',text=r['label'])
         if ok and name.strip():
-            try:self.project.name_version(r['id'],name.strip());self.refresh()
+            try:
+                result=self.project.name_version(r['id'],name.strip());self.refresh();self.publication_status(result,'Named version '+name.strip())
             except Exception as exc:self.fail(str(exc))
     def history_menu(self,ref,pos):
         r=self.project.resolve(ref);menu=W.QMenu(self)
@@ -376,7 +381,7 @@ class Window(W.QMainWindow):
             heads=next((n['refs'] for n in self.history.graph['nodes'] if n['id']==ref),[])
             branches={(h['source'],h['branch']) for h in heads if h['kind']=='head'} or {(r['source'],r.get('branch','main'))}
             for source,branch in sorted(branches):menu.addAction('Use '+source+'/'+branch+' for new saves',lambda _=False,s=source,b=branch:self.activate_branch(s,b))
-        if r['id'].startswith('assembly_'):menu.addAction('Set as main',lambda:(self.project.set_main(ref),self.refresh()))
+        if r['id'].startswith('assembly_'):menu.addAction('Set as main',lambda:self.set_main_record(ref))
         menu.addAction('View lineage…',lambda:self.show_lineage(r))
         menu.addAction('Copy version ID',lambda:W.QApplication.clipboard().setText(ref));menu.exec(pos)
     def show_lineage(self,r):
@@ -400,12 +405,14 @@ class Window(W.QMainWindow):
         entries.itemDoubleClicked.connect(follow)
         close=W.QDialogButtonBox(W.QDialogButtonBox.Close);close.rejected.connect(dialog.reject);layout.addWidget(close);dialog.exec()
     def activate_branch(self,source,name):
-        try:self.project.branch(source,name,activate=True);self.refresh();self.statusBar().showMessage('New '+source+' saves use '+name+'. Open an old version with Open with to resume its contents.')
+        try:
+            result=self.project.branch(source,name,activate=True);self.refresh();self.publication_status(result,'New '+source+' saves use '+name+'. Open an old version with Open with to resume its contents.')
         except Exception as exc:self.fail(str(exc))
     def create_branch(self,r):
         name,ok=W.QInputDialog.getText(self,'New source branch','Branch name:',text='exploration')
         if ok and name:
-            try:self.project.branch(r['source'],name,r['id'],activate=True);self.refresh();self.statusBar().showMessage('Capture branch: '+r['source']+'/'+name+'. To resume this historical geometry, use Open with to create a new working file.')
+            try:
+                result=self.project.branch(r['source'],name,r['id'],activate=True);self.refresh();self.publication_status(result,'Capture branch: '+r['source']+'/'+name+'. To resume this historical geometry, use Open with to create a new working file.')
             except Exception as e:self.fail(str(e))
     def open_record(self,ref):
         if self._closing:return
@@ -445,7 +452,7 @@ class Window(W.QMainWindow):
             if not self.tab_is_open(tab):return
             if not tab.record:self.mark_preview_state(tab)
             self.tab_changed()
-            self.statusBar().showMessage('Select meshes to add to an assembly.' if tab.load_state=='ready' else 'Viewport load failed; retry this version.')
+            self.statusBar().showMessage((getattr(self,'_publication_notice',None) or 'Select meshes to add to an assembly.') if tab.load_state=='ready' else 'Viewport load failed; retry this version.')
             if self.screenshot and tab.load_state=='ready':QtCore.QTimer.singleShot(600,self.save_screenshot)
         tab.display_finished.connect(finished)
         try:tab.display(parts,info,prepared)
@@ -490,9 +497,9 @@ class Window(W.QMainWindow):
             if cancel in self._brep_preparations:self._brep_preparations.remove(cancel)
         def done(result):
             finish();path=result['_directory']
-            self.statusBar().showMessage('B-rep job prepared; no STEP generated. '+path)
+            self.publication_status(result,'B-rep job prepared; no STEP generated. '+path)
             message=W.QMessageBox(self);message.setWindowTitle('B-rep job prepared');message.setTextFormat(QtCore.Qt.PlainText)
-            message.setText('Inputs and lineage saved. No inference has run and no STEP exists yet.\n\n'+path)
+            message.setText('Inputs and lineage saved. No inference has run and no STEP exists yet.\n\n'+path+('\n\n'+result['publication_warning'] if result.get('publication_warning') else ''))
             reveal=message.addButton('Reveal job folder',W.QMessageBox.ActionRole);message.addButton(W.QMessageBox.Close);message.exec()
             if message.clickedButton() is reveal:QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
         def failed(error):
@@ -677,25 +684,32 @@ class Window(W.QMainWindow):
             from .usd import export_usd
             r=assemble(self.project,selections,name)
             try:
-                export_usd(self.project,r['id'],output)
+                exported=export_usd(self.project,r['id'],output)
+                if exported.get('publication_warning'):r['publication_warning']='; '.join(filter(None,[r.get('publication_warning'),exported['publication_warning']]))
                 import tempfile
                 from .store import publish_file
                 with tempfile.TemporaryDirectory(prefix='lineage-',dir=self.project.root/'.cadgit/staging') as temporary:
                     metadata=Path(temporary)/'lineage.json';atomic_json(metadata,{'schema_version':1,'project_id':self.project.config['id'],'source_id':r['id'],'project':str(self.project.root)})
-                    publish_file(metadata,sidecar)
+                    from .errors import PublishedWriteError
+                    try:publish_file(metadata,sidecar)
+                    except PublishedWriteError as exc:
+                        if exc.destination!=str(sidecar.expanduser().absolute()):raise
+                        r['publication_warning']='; '.join(filter(None,[r.get('publication_warning'),str(exc)]))
             except Exception as exc:raise CadgitError('Assembly was saved to history as '+r['id']+', but file/lineage export did not complete: '+str(exc)) from exc
             try:self.project.event('assembly_exported',{'id':r['id'],'output':str(output)})
-            except OSError as exc:r['publication_warning']='Assembly and export saved; event log failed: '+str(exc)
+            except OSError as exc:r['publication_warning']=r.get('publication_warning','')+' Assembly and export saved; event log failed: '+str(exc)
             return r
         def done(r):
-            self._saving_assembly=False;self.latest_assembly=r;self.refresh();self.open_record(r['id']);self.update_actions();self.statusBar().showMessage('Saved '+str(output)+' • '+r['publication_warning'] if r.get('publication_warning') else 'Saved '+str(output)+' • open it in your modeling application to continue.')
+            self._saving_assembly=False;self.latest_assembly=r;self.refresh();self.open_record(r['id']);self.update_actions();self.publication_status(r,'Saved '+str(output)+' • open it in your modeling application to continue.')
         def failed(error):self._saving_assembly=False;self.refresh();self.update_actions()
         self.job(work,done,failed)
     def set_main(self):
         tab=self.current()
         if not tab or not tab.record or not tab.record['id'].startswith('assembly_'):return self.fail('Open a saved assembly tab first.')
+        self.set_main_record(tab.record['id'])
+    def set_main_record(self,ref):
         try:
-            result=self.project.set_main(tab.record['id']);self.refresh();self.statusBar().showMessage(result.get('publication_warning') or 'Main points to '+tab.record['label']+'; native app files are unchanged.')
+            result=self.project.set_main(ref);self.refresh();self.publication_status(result,'Main points to '+result['label']+'; native app files are unchanged.')
         except Exception as exc:self.fail(str(exc))
     def export_stl_dialog(self):
         tab=self.current()
@@ -706,12 +720,12 @@ class Window(W.QMainWindow):
         path,_=W.QFileDialog.getSaveFileName(self,'Export selected geometry as STL',str(self.project.root/'exports/part.stl'),'STL (*.stl)')
         if not path:return
         if W.QMessageBox.question(self,'STL settings','Export from '+record['label']+' ('+reference[-7:]+')\n'+(selected[0] if selected else 'Entire current file')+'\nUnits: millimeters. Open/nonmanifold meshes are rejected. Shader displacement is not evaluated.')!=W.QMessageBox.Yes:return
-        self.job(lambda:export_stl(self.project,reference,path,selected[0] if selected else None,allow_base_mesh=True),lambda r:self.statusBar().showMessage('STL saved: '+path+' • dimensions '+str(r['report']['dimensions'])+' mm'))
+        self.job(lambda:export_stl(self.project,reference,path,selected[0] if selected else None,allow_base_mesh=True),lambda r:self.publication_status(r,'STL saved: '+path+' • dimensions '+str(r['report']['dimensions'])+' mm'))
     def ingest_dialog(self):
         path,_=W.QFileDialog.getOpenFileName(self,'Add a whole USD file to history','','USD (*.usd *.usda *.usdc *.usdz)')
         if not path:return
         source,ok=W.QInputDialog.getText(self,'Source application','Source name:',text='manual')
-        if ok and source:self.job(lambda:self.project.ingest(path,source,Path(path).name,metadata={'import_path':str(Path(path).resolve())}),lambda r:(self.refresh(),self.open_record(r['id'])))
+        if ok and source:self.job(lambda:self.project.ingest(path,source,Path(path).name,metadata={'import_path':str(Path(path).resolve())}),lambda r:(self.refresh(),self.open_record(r['id']),self.publication_status(r,'Captured '+r['id'])))
     def connect_apps(self):
         from .connectors import attach
         from .service import start
@@ -745,7 +759,7 @@ class Window(W.QMainWindow):
         suffix=target.get('extension','.usd');path,_=W.QFileDialog.getSaveFileName(self,'Create new '+target['label']+' file',str(self.project.root/'source'/('derived_'+tab.record['id'][-6:]+suffix)),'Native file (*'+suffix+')')
         if not path:return
         from .handoff import create_native
-        self.job(lambda:create_native(self.project,tab.record['id'],target,Path(path)),lambda r:self.statusBar().showMessage(('Created new file with lineage: '+r['file'] if r.get('launched',True) else 'File created, but launch failed: '+r.get('launch_error','Unknown application error')+' • '+r['file'])))
+        self.job(lambda:create_native(self.project,tab.record['id'],target,Path(path)),lambda r:self.publication_status(r,('Created new file with lineage: '+r['file'] if r.get('launched',True) else 'File created, but launch failed: '+r.get('launch_error','Unknown application error')+' • '+r['file'])))
     def settings(self):
         dialog=W.QDialog(self);dialog.setWindowTitle('Project settings');dialog.resize(650,430);layout=W.QVBoxLayout(dialog)
         layout.addWidget(label('Application targets','title'));layout.addWidget(label('Built-in adapters create new native files. External commands can use {usd}.','muted'))
@@ -759,7 +773,10 @@ class Window(W.QMainWindow):
             try:
                 from .handoff import validate_targets
                 value=validate_targets(json.loads(editor.toPlainText()))
-                config=read_json(self.project.root/'cadgit.json');config['open_targets']=value;atomic_json(self.project.root/'cadgit.json',config);self.reload_open_menu();dialog.accept()
+                with self.project.lock():
+                    config=read_json(self.project.root/'cadgit.json');config['open_targets']=value
+                    result=self.project._publish_config(config,{'open_targets':value},'targets_configured',{'labels':[target['label'] for target in value]})
+                self.reload_open_menu();dialog.accept();self.publication_status(result,'Application targets saved')
             except Exception as e:W.QMessageBox.warning(dialog,'Invalid targets',str(e))
         buttons.accepted.connect(save);buttons.rejected.connect(dialog.reject);dialog.exec()
     def toggle_theme(self):

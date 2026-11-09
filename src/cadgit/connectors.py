@@ -72,7 +72,7 @@ def capture(project, app, endpoint=None, respect_binding=False):
     if app=='blender':
         code="import bpy\nhooks=[h for h in bpy.app.handlers.save_post if hasattr(h,'_cadgit_project')]\n"
         code+="owned=[h for h in hooks if h._cadgit_project=="+root+"]\n"
-        code+="if len(owned)!=1 or any(h._cadgit_project!="+root+" for h in hooks): raise RuntimeError('CAD-GIT capture refused: Blender is unbound or belongs to another project; run begin explicitly to switch')\n"
+        code+="if len(owned)!=1 or any(h._cadgit_project!="+root+" for h in hooks): raise RuntimeError('Git CAD capture refused: Blender is unbound or belongs to another project; run begin explicitly to switch')\n"
         code+="owned[0].__globals__['cadgit_capture']("+trigger+")"
         return blender_rpc(code)
     if app!='rhino':raise CadgitError('Unknown adapter '+app)
@@ -81,7 +81,7 @@ def capture(project, app, endpoint=None, respect_binding=False):
         endpoint=json.loads(settings.read_text()).get('rhino_endpoint') if settings.exists() else None
     code="import scriptcontext\nh=scriptcontext.sticky.get('cadgit_capture')\n"
     code+="owner=getattr(h,'_cadgit_project',None) or getattr(h,'__globals__',{}).get('PROJECT')\n"
-    code+="if h is None or owner!="+root+": raise RuntimeError('CAD-GIT capture refused: Rhino is unbound or belongs to another project; run begin explicitly to switch')\n"
+    code+="if h is None or owner!="+root+": raise RuntimeError('Git CAD capture refused: Rhino is unbound or belongs to another project; run begin explicitly to switch')\n"
     code+="h("+trigger+")"
     return rhino_rpc(code,endpoint)
 
@@ -97,8 +97,8 @@ def detach(project, app, endpoint=None):
     code+="    h=scriptcontext.sticky.pop('cadgit_save_handler',None)\n    if h: Rhino.RhinoDoc.EndSaveDocument -= h\n"
     code+="    i=scriptcontext.sticky.pop('cadgit_idle_handler',None)\n    if i: Rhino.RhinoApp.Idle -= i\n"
     code+="    scriptcontext.sticky.pop('cadgit_capture',None)\n    scriptcontext.sticky.pop('cadgit_active_project',None)\n"
-    code+="    print('CAD-GIT Rhino save hook detached for this project')\n"
-    code+="else: print('CAD-GIT Rhino hook unchanged: active hook belongs to another project or is not attached')"
+    code+="    print('Git CAD Rhino save hook detached for this project')\n"
+    code+="else: print('Git CAD Rhino hook unchanged: active hook belongs to another project or is not attached')"
     return rhino_rpc(code,endpoint)
 
 

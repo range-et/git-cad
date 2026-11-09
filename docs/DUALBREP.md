@@ -8,17 +8,17 @@ models, changes original USD history, or converts an ordinary Rhino handoff.
 A separate upstream CUDA smoke run on C110P has since produced one independently
 validated solid and one failed shell-only result. See the
 [dated investigation](DUALBREP_CUDA_INVESTIGATION.md) and [open work](../issues.md).
-This does not activate CAD-GIT execution or qualify Apple Silicon.
+This does not activate Git CAD execution or qualify Apple Silicon.
 
 ## Product boundary: optional external service
 
-Decision, 2026-11-09: reconstruction is outside CAD-GIT's core scope. The existing
+Decision, 2026-11-09: reconstruction is outside Git CAD's core scope. The existing
 [range-et/DualBrep fork](https://github.com/range-et/DualBrep) is the intended home
 for a future independently versioned Docker service. No service image or Docker
 integration is implemented or qualified yet. Further model/backend development
-belongs there, and is not a CAD-GIT release requirement.
+belongs there, and is not a Git CAD release requirement.
 
-CAD-GIT's future adapter should only:
+Git CAD's future adapter should only:
 
 1. Probe Docker, the configured provider and its protocol/device capabilities.
 2. Submit an immutable prepared job on explicit user request, with bounded
@@ -28,12 +28,12 @@ CAD-GIT's future adapter should only:
 4. Verify returned artifacts and record accepted results as new derived history;
    preserve the original job, USD snapshots and main selection.
 5. If Docker, the image, a compatible device or a successful result is unavailable,
-   explain the specific reason and leave the rest of CAD-GIT fully usable. Do not
+   explain the specific reason and leave the rest of Git CAD fully usable. Do not
    silently change execution targets, install runtimes, or retry indefinitely.
 
 The provider owns inference, candidate search, fitting, sewing, unit restoration,
-geometry-quality diagnostics and its dependency stack. CAD-GIT owns job/result
-bookkeeping and honest acceptance of the provider's declared results. CAD-GIT does
+geometry-quality diagnostics and its dependency stack. Git CAD owns job/result
+bookkeeping and honest acceptance of the provider's declared results. Git CAD does
 not promise that every mesh becomes a solid or that reconstruction restores
 original native feature history.
 
@@ -41,7 +41,7 @@ The job/result protocol should be platform-independent. Container architecture
 and accelerator support remain explicit provider capabilities, qualified per
 host/runtime; a multi-architecture image is not proof of GPU portability. Apple
 Silicon acceleration is deferred provider research, not a prerequisite for shipping
-CAD-GIT. An unsupported local platform may simply report reconstruction unavailable.
+Git CAD. An unsupported local platform may simply report reconstruction unavailable.
 The native Windows CUDA experiments are not Docker validation.
 
 ## Using the preparation feature
@@ -53,11 +53,11 @@ units, transforms, exact source identity and material associations. It does not
 contain a STEP or pretend that original NURBS/feature history has been recovered.
 
 ```sh
-cad-git -p /path/to/project brep prepare ASSEMBLY_ID
-cad-git -p /path/to/project brep prepare SNAPSHOT_ID --select /World/Part
-cad-git -p /path/to/project brep list
-cad-git -p /path/to/project brep show JOB_ID
-cad-git -p /path/to/project brep verify JOB_ID
+git-cad -p /path/to/project brep prepare ASSEMBLY_ID
+git-cad -p /path/to/project brep prepare SNAPSHOT_ID --select /World/Part
+git-cad -p /path/to/project brep list
+git-cad -p /path/to/project brep show JOB_ID
+git-cad -p /path/to/project brep verify JOB_ID
 ```
 
 Jobs are committed under `artifacts/brep_jobs/<id>/`. Each includes `request.json`,
@@ -81,10 +81,10 @@ as a correctly sized Rhino model.
 
 ## Optional runtime and activation policy
 
-CAD-GIT does not depend on Torch, CUDA or pythonocc-core. Probe a separate runtime:
+Git CAD does not depend on Torch, CUDA or pythonocc-core. Probe a separate runtime:
 
 ```sh
-cad-git brep doctor --python /path/to/backend/bin/python --checkout /path/to/DualBrep
+git-cad brep doctor --python /path/to/backend/bin/python --checkout /path/to/DualBrep
 ```
 
 The UI runtime check also reads `CADGIT_DUALBREP_PYTHON` and
@@ -104,7 +104,7 @@ The inspected upstream revision is
 `9707b4b4e531943f38e83092ff7ad833cc60b2cb`. Source code is Apache-2.0. The published
 checkpoint archive is approximately 13 GB, and its model endpoint did not declare
 license metadata when inspected; check checkpoint terms separately before use or
-redistribution. No weights or upstream source are bundled by CAD-GIT.
+redistribution. No weights or upstream source are bundled by Git CAD.
 
 ## Apple Silicon feasibility
 

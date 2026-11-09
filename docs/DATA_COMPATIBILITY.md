@@ -68,7 +68,7 @@ revision. Optional fields must not silently change a historical result.
 ## OpenUSD's role
 
 OpenUSD permits custom attributes and relationships without requiring our tool to
-know every property in advance. CAD-GIT's selected-subtree composition copies USD
+know every property in advance. Git CAD's selected-subtree composition copies USD
 scene specs rather than rebuilding an assembly from the viewport's mesh data.
 Regression tests verify unfamiliar geometry and material attributes survive this
 path. This does not promise preservation of properties outside the selected
@@ -99,3 +99,42 @@ fixtures and exercise:
 Keep the original fixture files unchanged. Add fixtures and compatibility cases as
 new record fields or providers ship. Future releases must continue to pass these
 checks; a UI redesign alone must require no history migration.
+
+## Publication and recovery outcomes (November 9 working tree)
+
+A publication point and a durability confirmation are distinct. Once an exact
+revision, pointer or configuration is visible, a later directory-sync/event-log
+failure returns its committed identity with `publication_warning` where the API
+returns a record. The UI retains that warning through background presentation.
+Destination-tagged `PublishedWriteError` identifies an already-visible external
+file when a low-level path-returning API cannot carry a structured warning.
+Prepublication failure preserves prior authoritative state. Unreadable outcomes
+are reported as uncertain rather than rolling back a potentially published pointer.
+
+Verification follows exact snapshot parents/import provenance, assembly selections,
+native materials and library parent/dependency links. Save parents must be snapshots
+of the same source; cross-source provenance belongs in `imported_from`. Library
+relationship role names remain extensible and are not interpreted as scene roles.
+Inventoried assembly recipes must agree with their manifest selections/bindings,
+including preserved additive selection data. Per-call iterative traversal checks
+each reachable revision once and bounds diagnostics for shared/cyclic ancestry.
+
+New native material records use `capture_attempt_id` for an attempt that may fail
+before its snapshot commits. Existing manifests are never rewritten. A captured
+material's bytes may survive and be reused by a later successful capture; the
+successful snapshot pins that exact material revision.
+
+Inbox producers publish `ready.json` last and must keep that capture directory
+immutable afterward. New service ingests record `metadata.inbox_input_digest` for
+the ready marker, USD input and optional frozen native input. Receipt recovery
+requires exact source plus capture ID, healthy archived history and matching input
+identity before native cleanup. Changed inputs are retained with an error; legacy
+records without an input digest retain native input and report `cleanup_warning`.
+No hash is retroactively invented for legacy inputs. Unsafe symlinked inbox paths
+are rejected before locks or diagnostic writes. Digest samples detect changes at
+these boundaries; they do not provide synchronization with arbitrary external
+writers that ignore the immutable-ready producer contract.
+
+These changes are tracked in [the ongoing verification review](REVIEW_FULL_VERIFICATION.md).
+Final build/native/reviewer gates and the entire-project coverage target remain
+separate from these local implementation contracts.

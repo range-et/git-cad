@@ -10,3 +10,10 @@ build/
 dist/
 
 demo-project/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+mutants/

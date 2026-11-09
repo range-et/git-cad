@@ -4,7 +4,7 @@ from .usd import assemble,export_stl,stage_info
 
 
 def run(project):
-    mcp=FastMCP('CAD-GIT')
+    mcp=FastMCP('Git CAD')
     @mcp.tool()
     def project_status()->dict:
         from .service import status

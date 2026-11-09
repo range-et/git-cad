@@ -33,3 +33,54 @@ def test_timeout_stops_descendants(tmp_path):
         with pytest.raises(subprocess.TimeoutExpired):checks.execute([sys.executable,'-c',parent],log,.2)
     time.sleep(.7)
     assert not marker.exists()
+
+
+def test_success_banner_before_native_abort_does_not_pass_gate(tmp_path,monkeypatch):
+    """A Qt teardown abort after scenario assertions is still a failed process."""
+    monkeypatch.setattr(checks,'ROOT',tmp_path)
+    monkeypatch.setattr(checks,'source_state',lambda: {'git_head':'fixture','git_status':'','diff_sha256':'fixture'})
+    monkeypatch.setattr(sys,'argv',['check.py','--ui','--mcp'])
+    def abort_after_banner(command,stream,timeout):
+        if command[-1].endswith('dialog_workflows.py'):
+            stream.write('DIALOG_WORKFLOWS_VERIFIED: 46 cases\n')
+            return -6
+        return 0
+    monkeypatch.setattr(checks,'execute',abort_after_banner)
+    assert checks.main()==1
+    report=json.loads(next((tmp_path/'build/qa').glob('*/report.json')).read_text())
+    assert report['result']=='failed'
+    assert report['checks'][-1]['name']=='dialog_workflows'
+    assert report['checks'][-1]['exit_code']==-6
+    assert report['pending_checks']==['legacy_workflows','mcp_workflow_smoke']
+
+
+def test_all_requested_gate_commands_are_reported_and_no_checks_remain_pending(tmp_path,monkeypatch):
+    monkeypatch.setattr(checks,'ROOT',tmp_path)
+    monkeypatch.setattr(checks,'source_state',lambda:{'git_head':'fixture','git_status':'','diff_sha256':'fixture'})
+    monkeypatch.setattr(sys,'argv',['check.py','--build','--ui','--mcp','--mutation'])
+    commands=[]
+    def passed(command,stream,timeout):
+        commands.append(command)
+        if command[:2]==['uv','build']:
+            dist=Path(command[-1]);dist.mkdir();(dist/'fixture.whl').write_bytes(b'gate orchestration fixture, not a wheel qualification')
+        return 0
+    monkeypatch.setattr(checks,'execute',passed)
+    assert checks.main()==0
+    report=json.loads(next((tmp_path/'build/qa').glob('*/report.json')).read_text())
+    assert report['pending_checks']==[]
+    assert [item['name'] for item in report['checks']]==report['planned_checks']
+    assert {'build','wheel-install','wheel-smoke','mutation','mcp_workflow_smoke'}.issubset(item['name'] for item in report['checks'])
+    assert any(command[:3]==['uv','pip','install'] for command in commands)
+
+
+@pytest.mark.parametrize('failure',[subprocess.TimeoutExpired('fixture',1),KeyboardInterrupt()])
+def test_timeout_or_interrupt_keeps_remaining_gates_pending(tmp_path,monkeypatch,failure):
+    monkeypatch.setattr(checks,'ROOT',tmp_path)
+    monkeypatch.setattr(checks,'source_state',lambda:{'git_head':'fixture','git_status':'','diff_sha256':'fixture'})
+    monkeypatch.setattr(sys,'argv',['check.py','--build'])
+    def failed(command,stream,timeout):raise failure
+    monkeypatch.setattr(checks,'execute',failed)
+    assert checks.main()==1
+    report=json.loads(next((tmp_path/'build/qa').glob('*/report.json')).read_text())
+    assert report['result']==('interrupted' if isinstance(failure,KeyboardInterrupt) else 'failed')
+    assert 'core' in report['pending_checks'] and 'wheel-smoke' in report['pending_checks']
