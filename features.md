@@ -38,6 +38,22 @@ imply that deferred native/manual release gates have passed.
 
 ## History
 
+### 2026-11-09 — PR #1 publication warnings and skill mutation identity (#40, #41)
+
+- **#40:** snapshot ingest now returns every new native-material publication
+  warning with its revision ID alongside any snapshot warning. Completion warnings
+  remain transient; committed manifests and inputs are unchanged. Clean captures
+  and reuse of existing material archives omit the warning field.
+- **#41:** the onboarding loader registers `cadgit_skill.inspect_folder` before
+  executing the exact helper file. Real generated baseline and killed-mutant probes
+  now work; wrong-source checks remain strict. A selected actual runner candidate
+  was killed;325 unselected skill candidates remain pending, not credited.
+
+Validation:467 core tests/four snapshots, CLI and wheel/build gates passed;
+independent architecture80-case and QA53-case rechecks passed. These close the two
+specified PR findings; whole-project coverage and earlier native/GUI limits remain.
+[Reproduction, review and gate evidence](docs/REVIEW_PR1_MERGE_FIXES.md).
+
 ### 2026-11-09 — Verified traversal, recovery and save outcomes
 
 Local working-tree fixes with independent scoped rechecks and full selected gate

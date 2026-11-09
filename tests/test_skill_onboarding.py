@@ -1,13 +1,16 @@
 """Behavioral checks for the portable skill's read-only onboarding helper."""
 import hashlib
 import importlib.util
+import sys
 from pathlib import Path
 from cadgit.store import Project
 from test_history import box
 
 MODULE=Path(__file__).resolve().parents[1]/'skills/cad-git/scripts/inspect_folder.py'
-spec=importlib.util.spec_from_file_location('cadgit_skill_inspector',MODULE)
-inspector=importlib.util.module_from_spec(spec);spec.loader.exec_module(inspector)
+spec=importlib.util.spec_from_file_location('cadgit_skill.inspect_folder',MODULE)
+inspector=importlib.util.module_from_spec(spec)
+sys.modules[spec.name]=inspector
+spec.loader.exec_module(inspector)
 
 
 def contents(root):

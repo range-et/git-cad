@@ -3,6 +3,7 @@
 import ast
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -99,3 +100,66 @@ def test_real_probe_accounts_for_target_hits_and_failure_kind(tmp_path, scenario
             in evidence["internal_errors"]
         )
         assert evidence["hits"] == 0
+
+
+@pytest.mark.parametrize("mutated", [False, True], ids=["baseline", "candidate"])
+def test_onboarding_loader_supplies_exact_skill_module_to_real_probe(tmp_path, mutated):
+    module = "cadgit_skill.inspect_folder"
+    relative = Path("skills/cad-git/scripts/inspect_folder.py")
+    target = tmp_path / relative
+    target.parent.mkdir(parents=True)
+    generated = mutate_file_contents(str(relative), (ROOT / relative).read_text())
+    target.write_text(generated.code)
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    for filename in ("test_skill_onboarding.py", "test_history.py"):
+        (tests / filename).write_bytes((ROOT / "tests" / filename).read_bytes())
+    (tests / "conftest.py").write_text(
+        'from hypothesis import settings\nsettings.register_profile("ci", max_examples=1)\n'
+    )
+    broken_input = re.search(
+        r"^def (x_inspect_folder__mutmut_\d+)\([^\n]*\):\n    root=Path\(None\)",
+        generated.code,
+        re.MULTILINE,
+    )
+    assert broken_input, (
+        "Expected a generated mutation that discards the selected folder"
+    )
+    mutant = module + "." + broken_input.group(1) if mutated else ""
+    report = tmp_path / "report.json"
+    process = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/mutation_probe.py"),
+            "--source",
+            str(target),
+            "--module",
+            module,
+            "--mutant",
+            mutant,
+            "--report",
+            str(report),
+            str(tests / "test_skill_onboarding.py"),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert report.exists(), process.stdout + process.stderr
+    evidence = json.loads(report.read_text())
+    from test_verification_campaign import campaign
+
+    digest = hashlib.sha256(target.read_bytes()).hexdigest()
+    status = campaign.classify(
+        evidence, process.returncode, digest, mutant, str(target)
+    )
+    assert evidence["imported_source"] == str(target)
+    if mutated:
+        assert evidence["hits"] > 0
+        assert status == "killed", evidence
+    else:
+        assert status == "baseline-passed", evidence
+        assert any(
+            name.startswith(module + ".") for name in evidence["tests_by_function"]
+        )

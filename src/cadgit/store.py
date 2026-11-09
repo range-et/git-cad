@@ -319,6 +319,7 @@ class Project:
                 meta = dict(metadata or {})
                 material_files = sorted(filepath.parent.glob("material_*.blend")) if meta.get("native_capture") else []
                 native_materials = {}
+                material_warnings = []
                 mapping_path = filepath.parent / "materials.json"
                 mapping = read_json(mapping_path) if material_files and mapping_path.exists() else {}
                 for path in material_files:
@@ -340,7 +341,9 @@ class Project:
                             target = ms / relative; target.parent.mkdir(exist_ok=True)
                             shutil.copy2(filename, target); image_map[image_name] = relative
                         material_record = {"schema_version": 1, "id": mid, "created_at": now(), "label": entry["name"], "provider": "blender", "capture_attempt_id": sid, "entry_layer": "material.blend", "images": image_map}
-                        self.commit(ms, material_dir, material_record)
+                        material_result=self.commit(ms, material_dir, material_record)
+                        if material_result.get("publication_warning"):
+                            material_warnings.append(f"Material {mid}: "+material_result["publication_warning"])
                     native_materials[entry["name"]] = mid
                 meta["native_materials"] = native_materials
                 r = Snapshot(id=sid, source=source, branch=branch, parent=parent, created_at=timestamp, committed_at=now(),commit_sequence=max((r.get("commit_sequence",0) or 0 for r in existing),default=0)+1, label=label or filepath.stem, trigger=meta.pop("trigger", "ingest"), metadata=meta).model_dump()
@@ -388,7 +391,12 @@ class Project:
                 r['metadata']['native_materials_by_prim']=native_by_prim
                 if library_bindings:r.update(library_bindings=library_bindings,required_features=[FEATURE])
                 dest = self.root / "history/sources" / source / (r["created_at"].replace(":", "-") + "_" + sid)
-                return self.commit(staging, dest, r)
+                result=self.commit(staging, dest, r)
+                if material_warnings:
+                    warnings=[*material_warnings]
+                    if result.get("publication_warning"):warnings.append(result["publication_warning"])
+                    result={**result,"publication_warning":"; ".join(warnings)}
+                return result
             except Exception as e:
                 try:self.event("export_failed", {"id": sid, "error": str(e), "staging": str(staging)})
                 except OSError:pass

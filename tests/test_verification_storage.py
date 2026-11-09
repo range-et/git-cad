@@ -839,3 +839,67 @@ def test_canonical_native_capture_preserves_packaged_texture_bytes(tmp_path):
         part["texture_maps"]["base_color"]["pixels"][:, :, :3], pixels
     )
     assert source.read_bytes() == original
+
+
+@pytest.mark.parametrize(
+    "material_fault,snapshot_fault",
+    [(None, False), ("sync", False), ("sync", True), ("event", True)],
+)
+def test_ingest_reports_all_native_material_publication_warnings(
+    tmp_path, monkeypatch, material_fault, snapshot_fault
+):
+    from test_history import box
+
+    project = store.Project.init(tmp_path / "project")
+    source = box(tmp_path / "capture.usda")
+    for name in ("First", "Second"):
+        (tmp_path / f"material_{name}.blend").write_bytes(
+            f"opaque {name} material archive; no native renderer qualification".encode()
+        )
+    originals = {
+        path: path.read_bytes() for path in tmp_path.iterdir() if path.is_file()
+    }
+    real_sync, real_event = store.fsync_dir, project.event
+
+    def sync(path):
+        if material_fault == "sync" and path == project.root / "materials":
+            raise OSError("material sync unavailable")
+        if snapshot_fault and path == project.root / "history/sources/blender":
+            raise OSError("snapshot sync unavailable")
+        return real_sync(path)
+
+    def event(kind, data):
+        if (
+            material_fault == "event"
+            and kind == "record_committed"
+            and data["id"].startswith("mat_")
+        ):
+            raise OSError("material event unavailable")
+        return real_event(kind, data)
+
+    with monkeypatch.context() as fault:
+        fault.setattr(store, "fsync_dir", sync)
+        fault.setattr(project, "event", event)
+        result = project.ingest(source, "blender", metadata={"native_capture": True})
+    materials = project.records("materials")
+    assert len(materials) == 2 and project.verify(result)["ok"]
+    warning = result.get("publication_warning", "")
+    if material_fault:
+        assert warning.count(f"material {material_fault} unavailable") == 2
+        assert all(material["id"] in warning for material in materials)
+    else:
+        assert "publication_warning" not in result
+    assert ("snapshot sync unavailable" in warning) is snapshot_fault
+    manifests = [
+        Path(record["_directory"]) / "manifest.json" for record in [result, *materials]
+    ]
+    saved = {path: path.read_bytes() for path in manifests}
+    assert all("publication_warning" not in store.read_json(path) for path in manifests)
+    reused = project.ingest(source, "blender", metadata={"native_capture": True})
+    assert "publication_warning" not in reused
+    assert (
+        reused["metadata"]["native_materials"] == result["metadata"]["native_materials"]
+    )
+    assert all(
+        path.read_bytes() == data for path, data in {**originals, **saved}.items()
+    )
