@@ -1,5 +1,9 @@
 # PR #1 merge findings — 2026-11-09
 
+Historical unlinked issue numbers in this record are former local ledger IDs,
+not GitHub issue numbers. See the [migration map](ISSUE_MIGRATION.md); completed
+pre-migration items remain recorded in [features history](../features.md).
+
 Status: both specified findings verified fixed; existing broader qualification limits remain.
 
 - Scope: native-material completion warnings (#40) and canonical skill mutation
@@ -54,6 +58,6 @@ Status: both specified findings verified fixed; existing broader qualification l
 ## Remaining limits
 
 This fixes the two specified PR findings only. Project-wide 100% coverage/mutation
-completion (#16), the earlier intermittent GUI investigation (#39), and previously
+completion ([GitHub #15](https://github.com/range-et/git-cad/issues/15)), the earlier intermittent GUI investigation ([GitHub #29](https://github.com/range-et/git-cad/issues/29)), and previously
 recorded native qualification limits remain open. No merge or release is authorized
 by this review. The user authorized committing and pushing these fixes to PR #1.

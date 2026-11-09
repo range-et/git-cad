@@ -3,7 +3,7 @@
 This is external-backend evidence, not a CAD-GIT execution feature. The published
 CAD-GIT checkout on C110P was `97b81437a5142bcb9dba4cdee71a97eb93bab12c`;
 it does not contain the Mac working tree's job-preparation integration.
-Open follow-ups are [issues #1–#4](../issues.md).
+Open follow-ups are [provider follow-ups](https://github.com/range-et/git-cad/issues?q=is%3Aissue+is%3Aopen+DualBrep).
 
 ## Environment and provenance
 

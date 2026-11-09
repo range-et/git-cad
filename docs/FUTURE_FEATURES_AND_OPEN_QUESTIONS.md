@@ -1,9 +1,9 @@
 # Future features and open questions
 
 This design note preserves the reasoning behind deferred native-editability work.
-As of 2026-11-09, [issues.md](../issues.md) is the authoritative open-work ledger;
+As of 2026-11-09, [GitHub Issues](https://github.com/range-et/git-cad/issues) is the authoritative open-work ledger;
 [features.md](../features.md) records implemented capabilities. This note is not
-a second backlog or a commitment to a particular implementation. See issue #7.
+a second backlog or a commitment to a particular implementation. See [native editability #8](https://github.com/range-et/git-cad/issues/8).
 
 ## Native editability across application round trips
 
@@ -37,7 +37,9 @@ gate.
 
 ## Follow-ups from the adversarial reviews
 
-Open follow-ups now live in [issues.md](../issues.md): capture and branching (#5),
-scene/history scaling (#6), material fidelity (#8), accessibility (#9), and
-adapters/recovery (#10). Completed fixes remain in
+Open follow-ups now live in [GitHub Issues](https://github.com/range-et/git-cad/issues): [capture and branching](https://github.com/range-et/git-cad/issues/6),
+[scene/history scaling](https://github.com/range-et/git-cad/issues/7),
+[material fidelity](https://github.com/range-et/git-cad/issues/9),
+[accessibility](https://github.com/range-et/git-cad/issues/10), and
+[adapters/recovery](https://github.com/range-et/git-cad/issues/11). Completed fixes remain in
 [review findings and fixes](REVIEWS_AND_HARDENING.md).

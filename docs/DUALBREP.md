@@ -7,7 +7,7 @@ models, changes original USD history, or converts an ordinary Rhino handoff.
 
 A separate upstream CUDA smoke run on C110P has since produced one independently
 validated solid and one failed shell-only result. See the
-[dated investigation](DUALBREP_CUDA_INVESTIGATION.md) and [open work](../issues.md).
+[dated investigation](DUALBREP_CUDA_INVESTIGATION.md) and [open work](https://github.com/range-et/git-cad/issues).
 This does not activate Git CAD execution or qualify Apple Silicon.
 
 ## Product boundary: optional external service

@@ -1,6 +1,6 @@
 # Layered test verification
 
-Implemented locally on 2026-11-09 under issue #13. This is a bounded starting
+Implemented locally on 2026-11-09 under former ledger L13. This is a bounded starting
 scope, not repository-wide strict typing, exhaustive fuzzing or a correctness
 proof. Existing example-based, graphical and native checks remain necessary.
 
@@ -68,7 +68,7 @@ A future surviving mutation still needs review even if the numeric floor passes.
 
 ## Remaining work
 
-Issue #13 tracks broader static adoption, persistent-history state-machine
+[GitHub #14](https://github.com/range-et/git-cad/issues/14) tracks broader static adoption, persistent-history state-machine
 properties and wider mutation/serialization coverage. Semgrep/Bandit, additional
 contract frameworks, native fuzzing and network cassette tools are not installed
 as placeholders: add them when a concrete boundary and failure oracle justify
@@ -105,7 +105,7 @@ and the validator returns no value or modified record. The generated test is
 bounded corroborating evidence, not an exhaustive proof. No implementation-detail
 assertion was added solely to force a runtime-equivalent mutant to fail.
 
-## Entire-project campaign (#16, in progress)
+## Entire-project campaign ([GitHub #15](https://github.com/range-et/git-cad/issues/15), in progress)
 
 The current target includes every production Python file under `src/cadgit`,
 `scripts` and `skills/cad-git/scripts`, including native hooks and unimported files.
