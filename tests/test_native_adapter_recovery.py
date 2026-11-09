@@ -26,9 +26,11 @@ def rhino_runtime(monkeypatch):
 
 
 def attach_fake_rhino(root):
-    namespace={'PROJECT':str(root),'__rhino_doc__':types.SimpleNamespace(RuntimeSerialNumber=123)}
-    code=(Path(__file__).parents[1]/'src/cadgit/resources/rhino_hook.py').read_text()
-    exec(compile(code,'rhino_hook.py','exec'),namespace)
+    module=types.ModuleType('cadgit.resources.rhino_hook');namespace=module.__dict__
+    namespace.update(PROJECT=str(root),__rhino_doc__=types.SimpleNamespace(RuntimeSerialNumber=123))
+    path=Path(__file__).resolve().parents[1]/'src/cadgit/resources/rhino_hook.py'
+    namespace['__file__']=str(path);sys.modules[module.__name__]=module
+    exec(compile(path.read_text(),str(path),'exec'),namespace)
     return namespace
 
 
@@ -122,9 +124,11 @@ def blender_runtime(monkeypatch):
 
 
 def attach_fake_blender(project):
-    namespace={'PROJECT':str(project.root)}
-    code=(Path(__file__).parents[1]/'src/cadgit/resources/blender_hook.py').read_text()
-    exec(compile(code,'blender_hook.py','exec'),namespace)
+    module=types.ModuleType('cadgit.resources.blender_hook');namespace=module.__dict__
+    namespace['PROJECT']=str(project.root)
+    path=Path(__file__).resolve().parents[1]/'src/cadgit/resources/blender_hook.py'
+    namespace['__file__']=str(path);sys.modules[module.__name__]=module
+    exec(compile(path.read_text(),str(path),'exec'),namespace)
     return namespace
 
 

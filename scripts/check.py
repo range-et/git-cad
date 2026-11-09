@@ -1,10 +1,10 @@
-"""Run repeatable CAD-GIT gates and retain scoped machine-readable evidence."""
+"""Run repeatable Git CAD gates and retain scoped machine-readable evidence."""
 from pathlib import Path
 from datetime import datetime,timezone
 import argparse,hashlib,json,os,platform,signal,subprocess,sys,tempfile,time
 
 ROOT=Path(__file__).resolve().parents[1]
-UI_SUITES=('ui_smoke','ui_robustness','material_library_smoke','texture_preview_smoke','viewport_responsiveness','brep_preparation_smoke','workflow_combinations','dialog_workflows')
+UI_SUITES=('ui_smoke','ui_robustness','material_library_smoke','texture_preview_smoke','viewport_responsiveness','brep_preparation_smoke','workflow_combinations','dialog_workflows','legacy_workflows')
 
 
 def git(*args):
@@ -38,10 +38,12 @@ def main():
     parser.add_argument('--ui',action='store_true',help='Run actual Qt/VTK workflow gates (requires a desktop session)')
     parser.add_argument('--build',action='store_true',help='Build distributions and smoke-test the installed wheel')
     parser.add_argument('--mcp',action='store_true',help='Run the real stdio MCP workflow (requires the mcp extra)')
+    parser.add_argument('--mutation',action='store_true',help='Run isolated compatibility mutation audit (95% kill threshold)')
     args=parser.parse_args()
     stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
     output=ROOT/'build/qa'/stamp;output.mkdir(parents=True)
-    initial=source_state();planned=['diff','core','cli']
+    initial=source_state();planned=['diff','lint','format','types','core','cli']
+    if args.mutation:planned+=['mutation']
     if args.build:planned+=['build','wheel-install','wheel-smoke']
     if args.ui:planned+=list(UI_SUITES)
     if args.mcp:planned+=['mcp_workflow_smoke']
@@ -49,6 +51,7 @@ def main():
             'python':sys.version,'platform':platform.platform(),'checks':[],'result':'running',
             'not_run':['Independent architecture/UX/QA review (record separately)',
                        'Live native-application roundtrips']}
+    if not args.mutation:report['not_run'].append('Compatibility mutation audit (use --mutation)')
     if not args.mcp:report['not_run'].append('MCP protocol smoke (required when affected)')
     if not args.ui:report['not_run'].append('Graphical workflow suites')
     if not args.build:report['not_run'].append('Distribution build/install check')
@@ -66,8 +69,12 @@ def main():
     save()
     try:
         run('diff',['git','diff','--check','HEAD'])
-        run('core',[sys.executable,'-m','pytest','-q'])
+        run('lint',[sys.executable,'-m','ruff','check'])
+        run('format',[sys.executable,'-m','ruff','format','--check'])
+        run('types',[sys.executable,'-m','mypy'])
+        run('core',[sys.executable,'-m','pytest','-q','--hypothesis-profile=ci','--cov=cadgit','--cov-report=term','--cov-report=xml:'+str(output/'coverage.xml')])
         run('cli',[sys.executable,str(ROOT/'tests/integration/cli_smoke.py')])
+        if args.mutation:run('mutation',[sys.executable,str(ROOT/'scripts/check_mutations.py')],timeout=600)
         if args.build:
             with tempfile.TemporaryDirectory(prefix='cadgit-build-gate-') as temporary:
                 directory=Path(temporary);dist=directory/'dist';installed=directory/'installed'

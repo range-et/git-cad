@@ -1,20 +1,35 @@
 from __future__ import annotations
-import json, os, signal, subprocess, sys, time
+import hashlib, json, os, signal, subprocess, sys, time
 from pathlib import Path
-from .store import Project, atomic_json, now, read_json
+from .store import CadgitError, Project, atomic_json, file_digest, now, read_json
+
+
+def input_digest(marker,filename):
+    """Identify frozen producer inputs before allowing destructive cleanup."""
+    native=marker.parent/'native_capture.3dm'
+    values={'ready':file_digest(marker),'usd':file_digest(filename),'native':file_digest(native) if native.exists() else None}
+    return hashlib.sha256(json.dumps(values,sort_keys=True).encode()).hexdigest()
 
 
 def process_inbox(project):
     import fcntl
     count=0
-    captured={r.get('metadata',{}).get('capture_id'):r for r in project.records() if r.get('metadata',{}).get('capture_id')}
+    inbox=project.root/'.cadgit/inbox'
+    if (project.root/'.cadgit').is_symlink() or inbox.is_symlink() or not inbox.resolve().is_relative_to(project.root):raise CadgitError('Unsafe inbox directory; no captures processed')
+    captured={}
+    for record in project.records():
+        capture_id=record.get('metadata',{}).get('capture_id')
+        if isinstance(capture_id,str) and capture_id:captured.setdefault((record['source'],capture_id),[]).append(record)
     def order(marker):
         try:
             data=read_json(marker);sequence=data.get('metadata',{}).get('sequence',marker.stat().st_mtime_ns)
             if not isinstance(sequence,int):sequence=marker.stat().st_mtime_ns
             return (str(data.get('source') or ''),sequence)
         except Exception:return ('',0)
-    for marker in sorted((project.root/'.cadgit/inbox').glob('*/ready.json'),key=order):
+    for marker in sorted(inbox.glob('*/ready.json'),key=order):
+        if marker.is_symlink() or marker.parent.is_symlink() or not marker.parent.resolve().is_relative_to(inbox.resolve()) or (marker.parent/'ingest.lock').is_symlink():
+            print('Unsafe inbox capture skipped: '+str(marker.parent),flush=True)
+            continue
         with (marker.parent/'ingest.lock').open('a') as claim:
             try:fcntl.flock(claim,fcntl.LOCK_EX|fcntl.LOCK_NB)
             except BlockingIOError:continue
@@ -24,17 +39,30 @@ def process_inbox(project):
             try:
                 # Recover a crash after commit publication but before its receipt.
                 # This also repairs the error marker left by a failed receipt write.
-                if capture_id in captured:
-                    record=captured[capture_id]
-                    atomic_json(receipt,{'snapshot_id':record['id'],'committed_at':now(),'recovered':True})
-                    error.unlink(missing_ok=True);(marker.parent/'native_capture.3dm').unlink(missing_ok=True)
+                data=read_json(marker)
+                if not isinstance(data.get('source'),str) or not data['source']:raise CadgitError('Invalid inbox source')
+                filename=(marker.parent/data['file']).resolve()
+                if not filename.is_relative_to(marker.parent.resolve()):raise ValueError('Unsafe inbox path')
+                fingerprint=input_digest(marker,filename)
+                key=(data['source'],capture_id)
+                matches=captured.get(key,[])
+                if len(matches)>1:raise CadgitError('Ambiguous recovered capture identity; frozen native source retained')
+                if matches:
+                    record=matches[0]
+                    if not project.verify(record)['ok']:raise CadgitError('Recovered capture failed integrity verification; frozen native source retained')
+                    saved_digest=record.get('metadata',{}).get('inbox_input_digest')
+                    if saved_digest is not None and (saved_digest!=fingerprint or input_digest(marker,filename)!=fingerprint):raise CadgitError('Recovered capture inputs changed; frozen native source retained')
+                    recovered={'snapshot_id':record['id'],'committed_at':now(),'recovered':True}
+                    if saved_digest is None:recovered['cleanup_warning']='Legacy capture has no frozen-input digest; native input retained'
+                    atomic_json(receipt,recovered)
+                    error.unlink(missing_ok=True)
+                    if saved_digest is not None:(marker.parent/'native_capture.3dm').unlink(missing_ok=True)
                     continue
                 if error.exists():continue
-                data=read_json(marker);filename=(marker.parent/data['file']).resolve()
-                if not filename.is_relative_to(marker.parent.resolve()):raise ValueError('Unsafe inbox path')
-                metadata={**data.get('metadata',{}),'capture_id':capture_id}
+                metadata={**data.get('metadata',{}),'capture_id':capture_id,'inbox_input_digest':fingerprint}
                 record=project.ingest(filename,data['source'],data.get('label'),branch=data.get('branch'),metadata=metadata)
-                captured[capture_id]=record
+                captured[key]=[record]
+                if input_digest(marker,filename)!=fingerprint:raise CadgitError('Capture inputs changed during ingestion; frozen native source retained')
                 atomic_json(receipt,{'snapshot_id':record['id'],'committed_at':now()})
                 (marker.parent/'native_capture.3dm').unlink(missing_ok=True);count+=1
             except Exception as exc:

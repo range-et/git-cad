@@ -277,6 +277,7 @@ class LibraryWidget(W.QWidget):
             if item.data(QtCore.Qt.UserRole)==record['asset_id']:
                 self.grid.setCurrentItem(item);self.selected(item);self.revisions.setCurrentIndex(self.revisions.findData(revision));self.revision_selected();return
     def revision_selected(self,*_):
+        self._valid_selection=False;self.record=None;self.actions()
         ref=self.revisions.currentData()
         if not ref:return
         try:
@@ -316,14 +317,15 @@ class LibraryWidget(W.QWidget):
                 target=self.indexed(link['revision_id']);item=W.QTreeWidgetItem(inputs if link in r.get('dependencies',[]) else parents,[link['role']+' • '+target['label']+' r'+str(target['revision_number']),link['revision_id']]);item.setData(0,QtCore.Qt.UserRole,link['revision_id'])
             self.history.expandToDepth(0)
             self.source.setPlainText(json.dumps(r.get('provenance',{}),indent=2));self.actions()
-        except Exception as exc:self.fail(exc)
+        except Exception as exc:
+            self._valid_selection=False;self.preview.clear();self.actions();self.fail(exc)
     def actions(self):
         r=self.record;material=bool(r and self._valid_selection and r['kind']=='material');busy=bool(self.jobs)
         self.use_button.setEnabled(material and not busy);self.recombine_button.setEnabled(material and not busy);self.revise_button.setEnabled(bool(r and self._valid_selection and not r.get('legacy')) and not busy);self.derive_button.setEnabled(bool(r and self._valid_selection) and not busy);self.verify_button.setEnabled(bool(r));self.reveal_button.setEnabled(bool(r));self.open_button.setEnabled(bool(r));self.source_button.setEnabled(bool(r and web_url(r.get('provenance',{}).get('source_url',''))))
     def follow_link(self,item,column=0):
         ref=item.data(0,QtCore.Qt.UserRole)
         if ref:self.select_revision(ref)
-    def changed_record(self,record):self.refresh();self.select_revision(record['id']);self.changed.emit();self.status.setText('Saved immutable revision '+record['id'])
+    def changed_record(self,record):self.refresh();self.select_revision(record['id']);self.changed.emit();self.status.setText('Saved immutable revision '+record['id']+(' • '+record['publication_warning'] if record.get('publication_warning') else ''))
     def save_material_editor(self,editor,asset_id=None,expected_revision=None,parents=None):
         try:name=editor.name.text().strip();definition=editor.value();provenance=editor.provenance.value();note=editor.note.text()
         except Exception as exc:return self.fail(exc)
@@ -355,8 +357,11 @@ class LibraryWidget(W.QWidget):
             return imported,failure
         def complete(result):
             imported,failure=result
-            if imported:self.changed_record(imported[-1])
-            if failure:self.fail('Imported '+str(len(imported))+' file(s); import stopped at '+failure+'; successful IDs: '+', '.join(r['id'] for r in imported))
+            if imported:
+                result=dict(imported[-1]);warnings=[r['id']+': '+r['publication_warning'] for r in imported if r.get('publication_warning')]
+                if warnings:result['publication_warning']='; '.join(warnings)
+                self.changed_record(result)
+            if failure:self.fail('Imported '+str(len(imported))+' file(s); import stopped at '+failure+'; successful IDs: '+', '.join(r['id'] for r in imported)+(' • '+result.get('publication_warning','') if imported and result.get('publication_warning') else ''))
         self.run(operation,complete)
     def import_folder(self):
         directory=W.QFileDialog.getExistingDirectory(self,'Import downloaded local assets (no archive extraction)')
@@ -387,7 +392,7 @@ class LibraryWidget(W.QWidget):
             label=name.text().strip();physical_revision=physical.currentData();appearance_revision=appearance.currentData()
             self.run(lambda:self.library.recombine(label,physical_revision,appearance_revision),self.changed_record)
     def use_material(self):
-        if self.record and self.record['kind']=='material':self.materialSelected.emit(self.record['id'])
+        if self.record and self._valid_selection and not self.jobs and self.record['kind']=='material':self.materialSelected.emit(self.record['id'])
     def verify(self):
         if self.record:self.status.setText(json.dumps(self.library.verify(self.record['id']),indent=2))
     def reveal(self):

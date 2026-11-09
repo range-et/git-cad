@@ -1,4 +1,4 @@
-name: CAD-GIT build gates
+name: Git CAD build gates
 on:
   pull_request:
   push:
@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: uv sync --frozen --extra dev --extra mcp
-      - run: uv run --frozen python scripts/check.py --build
+      - run: uv run --frozen python scripts/check.py --build --mcp --mutation
       - name: Summarize gate report
         if: always()
         run: |

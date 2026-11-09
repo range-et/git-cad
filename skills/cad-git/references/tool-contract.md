@@ -14,11 +14,11 @@
 | `artifacts/prints/<id>/` | Registered STL, provenance and topology report. |
 | `.cadgit/` | Ignored runtime, inbox, diagnostics and draft state. Failed/pending captures may be needed for recovery. |
 
-The GitHub repository is `range-et/git-cad`; the executable is `cad-git`. There is
+The GitHub repository is `range-et/git-cad`; the executable is `git-cad`. There is
 no requirement to create a Git repository, commit binaries, push to a remote, or
 use an AI agent. The example `test/bridge.json` in the tool checkout predates the
 current runtime. Do not copy its configuration or software-ownership assumptions
-into a new project. `cad-git demo` creates generated sample history, not a port of
+into a new project. `git-cad demo` creates generated sample history, not a port of
 the user's files.
 
 ## CLI conventions
@@ -148,7 +148,7 @@ are separate connections.
 
 ## Optional B-rep preparation
 
-`cad-git -p PROJECT brep prepare REF [--select /Prim]` creates a committed input
+`git-cad -p PROJECT brep prepare REF [--select /Prim]` creates a committed input
 bundle under `artifacts/brep_jobs/`. `brep list/show/verify` inspect these jobs.
 `brep doctor --python BACKEND_PYTHON --checkout DUALBREP` probes an external optional
 runtime; launch environment variables `CADGIT_DUALBREP_PYTHON` and

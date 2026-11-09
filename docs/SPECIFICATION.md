@@ -1,4 +1,4 @@
-# CAD-GIT first release specification
+# Git CAD first release specification
 
 Status: final review draft, revision 1, 2026-11-07. Not yet implemented. “v1” means the first
 usable product release, including the UI; package versions may initially be 0.1.x.
@@ -7,7 +7,7 @@ optional behavior. Interfaces below are specified, not implemented.
 
 ## 1. Mission and preservation promise
 
-CAD-GIT is a fully local USD snapshot history and assembly tool implemented in Python.
+Git CAD is a fully local USD snapshot history and assembly tool implemented in Python.
 Native applications continue working normally with their existing working files.
 Every tracked native save, and every configured tool snapshot, produces a new
 immutable timestamped USD snapshot. The user browses that history in a 3D UI,
@@ -23,7 +23,7 @@ The promise is: **Every successfully recorded USD snapshot remains addressable,
 and every assembled result records exactly which snapshots and scene pieces it
 came from.** Source snapshots are never overwritten by composition or omission.
 
-CAD-GIT preserves exported USD scene states and their file lineage. It does not
+Git CAD preserves exported USD scene states and their file lineage. It does not
 promise historical restoration of complete native documents, feature trees,
 procedural modifiers, rigs, sculpt strokes, or anything the exporter omitted.
 Geometry export can tessellate native CAD surfaces. The UI MUST distinguish that
@@ -68,8 +68,8 @@ The first release does NOT require:
 
 ## 3. Native working files remain native
 
-Each bound document has one CAD-GIT-managed working native path, for example
-`source/model.3dm` and `source/scene.blend`. CAD-GIT MUST NOT rename that path to
+Each bound document has one Git CAD-managed working native path, for example
+`source/model.3dm` and `source/scene.blend`. Git CAD MUST NOT rename that path to
 include version numbers, redirect normal saves into history folders, or maintain
 one permanent native copy per USD snapshot. The application retains its normal
 save, undo, autosave, backup, and recovery behavior; existing `.blend1` or Rhino
@@ -86,7 +86,7 @@ or pretending to save the native document. Such a snapshot MUST be labelled
 
 Save As is allowed: the connector records the new active working path after user
 confirmation of the binding. Choosing a new unrelated document requires an
-explicit new source binding. CAD-GIT MUST NOT open, close, or import into native
+explicit new source binding. Git CAD MUST NOT open, close, or import into native
 applications merely because a new snapshot or main assembly exists.
 
 ## 4. Source timelines and main
@@ -247,7 +247,7 @@ Timed tool snapshots are configurable and disabled until enabled by the user.
 They export current state, label unsaved content accurately, and do not change the
 native file's path, dirty flag, undo history, or native autosave policy. Busy-app
 postponement is visible. Save/export callbacks MUST distinguish their origins to
-avoid recursively creating snapshots from CAD-GIT's own export operations.
+avoid recursively creating snapshots from Git CAD's own export operations.
 
 ## 7. Domain model and lineage
 
@@ -276,7 +276,7 @@ parent/child selections, placement transforms, dependency policy, and any explic
 property overrides. Snapshot, recipe, assembly, and artifact IDs are separate.
 Parent links are recorded; timestamps do not establish causality.
 
-When a user imports a CAD-GIT result into a native app, known import provenance can
+When a user imports a Git CAD result into a native app, known import provenance can
 be attached to later snapshots. Unobserved manual imports need a user-supplied
 lineage annotation. The tool MUST NOT infer proof of lineage from visual similarity
 or a filename alone. Source editing histories can diverge freely without producing
@@ -412,7 +412,7 @@ unimplemented substitute for integrated selection/assembly preview.
 The UI MUST use [Monad System](https://github.com/range-et/monad_system). The
 reviewed revision is `358d0559da407897957a5817b24f9ebd8774b791`. Its `colors.json`
 is the palette source; its generated CSS supplies reference spacing/typography.
-The inspected repo does not include a Qt adapter. CAD-GIT must generate a small
+The inspected repo does not include a Qt adapter. Git CAD must generate a small
 Qt palette/QSS adapter from pinned tokens rather than treating browser CSS as a
 Qt stylesheet. Preserve the upstream MIT notice with reused assets.
 
@@ -472,7 +472,7 @@ The user can take, for example, an engine block from Rhino snapshot R12, its cov
 from Rhino R8, and a sculpted housing from Blender B5. These become selections
 inside one assembly draft. No shared native feature history is required.
 
-For each selection CAD-GIT MUST:
+For each selection Git CAD MUST:
 
 1. Resolve the exact immutable snapshot and verify that the selected path exists.
 2. Include the selected prim/subtree plus required dependencies and inherited
@@ -546,13 +546,13 @@ supply an explicit override. Omitting a selection never erases its source histor
 Two different shape versions can coexist without proving which is correct. Physical
 intersections MAY be displayed, but manufacturability or automatic geometric
 reconciliation is not promised. The user is assembling scene assets, not asking
-CAD-GIT to merge vertex edits or synthesize a combined native CAD feature tree.
+Git CAD to merge vertex edits or synthesize a combined native CAD feature tree.
 
 ## 10. Coordinates, composition, and validation
 
 The shared interchange contract is units, coordinate conventions, and optional
 portable materials. Geometry is captured and selected, not live-synchronized.
-Normalization applies to exported/assembled USD; CAD-GIT MUST NOT silently change
+Normalization applies to exported/assembled USD; Git CAD MUST NOT silently change
 native document units, origin, or application settings. A user's explicit assembly
 placement is separate from automatic unit/basis conversion.
 
@@ -592,7 +592,7 @@ Material revisions are immutable; recipes pin exact graph/data revisions and
 bindings. Selecting new Rhino geometry with an old Blender shader is a required
 first-release workflow for the tested native graph subset. USD carries the scene,
 portable look, and native asset references; restoring the exact native graph needs
-the CAD-GIT Blender adapter or an explicit native material append step. A bare USD
+the Git CAD Blender adapter or an explicit native material append step. A bare USD
 import cannot be advertised as preserving arbitrary Cycles graphs.
 
 Working assignments MAY follow the latest compatible provider representation.
@@ -639,7 +639,7 @@ Nothing silently repoints already recorded artifacts to the new main.
 
 ### 11.1 Direct geometry exports for printing and reuse
 
-CAD-GIT MUST export printable mesh files directly from any committed USD snapshot
+Git CAD MUST export printable mesh files directly from any committed USD snapshot
 or saved assembly, including older versions and individual selected parts. The
 operation MUST work while Rhino and Blender are closed. Main promotion is not
 required to export a historical source part. STL is required in v1; 3MF, OBJ, PLY,
@@ -714,7 +714,7 @@ with imported lineage recorded when available.
 Native editability across application round trips and optional native version
 archives are deferred in [Future features and open questions](FUTURE_FEATURES_AND_OPEN_QUESTIONS.md); neither is a V1 release requirement.
 
-For an assembly requiring native Blender material fidelity, an explicit CAD-GIT
+For an assembly requiring native Blender material fidelity, an explicit Git CAD
 import can append archived material datablocks after importing USD geometry and
 bind them from the recipe. This small native-asset restoration path is required
 for the supported material profile; an automatic geometry refresh engine is not.
@@ -819,7 +819,7 @@ network activation.
 
 ## 13. CLI and optional MCP
 
-Canonical executable: `cad-git`. Required CLI operations are:
+Canonical executable: `git-cad`. Required CLI operations are:
 
 | Command | Behavior |
 | --- | --- |
@@ -864,8 +864,8 @@ is not optional in the first usable release.
 Example direct print export (specified interface, not yet implemented):
 
 ```sh
-cad-git export rhino~3 --select /Engine/Block --format stl --units mm --output exports/block.stl
-cad-git export main --select /World/Engine/Cover --format stl --units mm --output exports/cover.stl
+git-cad export rhino~3 --select /Engine/Block --format stl --units mm --output exports/block.stl
+git-cad export main --select /World/Engine/Cover --format stl --units mm --output exports/cover.stl
 ```
 
 The selector must resolve to an immutable snapshot/assembly before work starts.
@@ -1072,13 +1072,13 @@ fixtures remain unchanged and do not imply that the new product is implemented.
   and native-history assumptions in that assessment are superseded.
 - [Related systems](RELATED_SYSTEMS.md): Prism, Speckle, FreeCAD History Workbench,
   AYON, and OpenAssetIO; use them as reuse/workflow comparisons, not evidence of
-  unique CAD-GIT capability.
+  unique Git CAD capability.
 - [Materials and lineage](MATERIALS_AND_LINEAGE.md): native graph preservation,
   portable materials, engineering facets, and future Substance/Ansys integration.
 - [OpenUSD glossary](https://openusd.org/release/glossary.html): composition,
   references/payloads, paths, and stage/layer semantics.
 - [OpenUSD toolset](https://openusd.org/release/toolset.html): viewer, validation,
-  and export tools; none automatically supplies CAD-GIT's snapshot/assembly ledger.
+  and export tools; none automatically supplies Git CAD's snapshot/assembly ledger.
 - [PyVistaQt integration](https://qt.pyvista.org/usage.html) and
   [PyVista picking](https://docs.pyvista.org/api/plotting/_autosummary/pyvista.plotter.enable_mesh_picking):
   selected viewport integration references.

@@ -5,7 +5,7 @@ from typing import Optional
 import typer
 from .store import Project, CadgitError, read_json, atomic_json
 
-app=typer.Typer(no_args_is_help=True,help='CAD-GIT • local USD history and deliberate assembly')
+app=typer.Typer(no_args_is_help=True,help='Git CAD • local USD history and deliberate assembly')
 assembly_app=typer.Typer();app.add_typer(assembly_app,name='assembly')
 main_app=typer.Typer();app.add_typer(main_app,name='main')
 material_app=typer.Typer();app.add_typer(material_app,name='material')
@@ -165,8 +165,8 @@ def autosnapshot(ctx:typer.Context,mode:str,interval:int=300):
     p=project(ctx)
     with p.lock():
         config=read_json(p.root/'cadgit.json');config['tool_interval_seconds']=interval if mode=='on' else None
-        p.event('autosnapshot_configured',{'interval':config['tool_interval_seconds']});atomic_json(p.root/'cadgit.json',config)
-    emit({'interval':config['tool_interval_seconds'],'requires_service':'Run begin to monitor apps'})
+        result=p._publish_config(config,{'interval':config['tool_interval_seconds'],'requires_service':'Run begin to monitor apps'},'autosnapshot_configured',{'interval':config['tool_interval_seconds']})
+    emit(result)
 
 @app.command('mcp')
 def mcp_server(ctx:typer.Context):
@@ -177,6 +177,6 @@ def mcp_server(ctx:typer.Context):
 def main():
     try:app()
     except CadgitError as exc:
-        typer.echo(f'CAD-GIT: {exc}',err=True);raise SystemExit(1)
+        typer.echo(f'Git CAD: {exc}',err=True);raise SystemExit(1)
 
 if __name__=='__main__':main()

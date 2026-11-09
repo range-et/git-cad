@@ -16,7 +16,7 @@ python3 "/path/to/this/skill/scripts/inspect_folder.py" "/absolute/path/design-f
 ```
 
 The helper reads names/config only; it does not open or export native documents.
-Its JSON is an inventory, not a validation of CAD-GIT data or native dependencies.
+Its JSON is an inventory, not a validation of Git CAD data or native dependencies.
 Review the reported files and any unreadable paths. Follow existing references to
 external assets without moving them. Classify `.blend` files as native working
 scenes or shader libraries; do not open every graph library as a model. Inventory
@@ -31,7 +31,7 @@ If `cadgit.json` is present, or the helper finds a nested project config, run
 
 An existing folder can itself be the project root when it has no conflicting
 reserved paths. If it already has `history/`, `main/`, `materials/`, `artifacts/`,
-`assemblies/`, `library/`, `.cadgit/` or `mcp.example.json` unrelated to CAD-GIT, choose a new
+`assemblies/`, `library/`, `.cadgit/` or `mcp.example.json` unrelated to Git CAD, choose a new
 child such as `cad-project/`. Native assets can stay outside that child.
 
 For example, keep this existing layout:
@@ -50,7 +50,7 @@ Add a new history store at `design-folder/cad-project/` instead of taking over
 
 ```sh
 CADGIT_TOOL_ROOT="/absolute/path/to/git-cad"
-CADGIT_BIN="$CADGIT_TOOL_ROOT/.venv/bin/cad-git"
+CADGIT_BIN="$CADGIT_TOOL_ROOT/.venv/bin/git-cad"
 CADGIT_PROJECT="/absolute/path/design-folder/cad-project"
 
 # Only if the tool environment has not been installed:
@@ -60,7 +60,7 @@ CADGIT_PROJECT="/absolute/path/design-folder/cad-project"
 "$CADGIT_BIN" -p "$CADGIT_PROJECT" status
 ```
 
-Inspect the generated config/Git rules. CAD-GIT adds rules at its selected project
+Inspect the generated config/Git rules. Git CAD adds rules at its selected project
 root; a Git ignore rule higher in the existing repo can still hide that child.
 Do not stage or commit the user's files unless requested. Stop if initialization
 reports a collision; use a different empty root rather than deleting the conflict.
@@ -74,9 +74,9 @@ listeners enabled. Confirm which document is active before binding capture. Do n
 close unrelated documents, change their working paths or save their edits just
 because a project was initialized.
 
-If a known previous CAD-GIT project is being replaced, stop that project's watcher
+If a known previous Git CAD project is being replaced, stop that project's watcher
 first. Do not stop arbitrary projects. `begin` explicitly switches the application's
-CAD-GIT binding to this project; hooks do not watch all files on disk.
+Git CAD binding to this project; hooks do not watch all files on disk.
 
 ```sh
 "$CADGIT_BIN" -p "$CADGIT_PROJECT" doctor

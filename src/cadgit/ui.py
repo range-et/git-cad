@@ -84,11 +84,11 @@ def panel(title):
 
 class Window(W.QMainWindow):
     def __init__(self,project,screenshot=None):
-        super().__init__();self.project=project;self.record=None;self.parts=[];self.actor_paths={};self.draft=[];self.jobs=[];self.loading=0;self.light=False;self.screenshot=screenshot
-        self.setWindowTitle('CAD-GIT • '+project.config['name']);self.resize(1430,930);self.setMinimumSize(1120,760)
+        super().__init__();self.project=project;self.record=None;self.parts=[];self.actor_paths={};self.draft=[];self.jobs=[];self.loading=0;self.light=False;self.screenshot=screenshot;self._publication_notice=None
+        self.setWindowTitle('Git CAD • '+project.config['name']);self.resize(1430,930);self.setMinimumSize(1120,760)
         self.colors=theme(W.QApplication.instance())
         root=W.QWidget();self.setCentralWidget(root);layout=W.QVBoxLayout(root);layout.setContentsMargins(20,18,20,10);layout.setSpacing(14)
-        header=W.QHBoxLayout();header.addWidget(label('CAD—GIT','brand'));header.addSpacing(20)
+        header=W.QHBoxLayout();header.addWidget(label('Git CAD','brand'));header.addSpacing(20)
         title=W.QVBoxLayout();title.addWidget(label(project.config['name'],'title'));title.addWidget(label('USD SNAPSHOT HISTORY / ASSEMBLY','eyebrow'));header.addLayout(title);header.addStretch()
         header.addWidget(label('●  LOCAL PROJECT','badge'));header.addWidget(button('Open folder',self.open_folder));header.addWidget(button('Light / dark',self.toggle_theme));layout.addLayout(header)
         # Main workbench: history | geometry | inspector.
@@ -138,7 +138,12 @@ class Window(W.QMainWindow):
         j.signals.done.connect(complete);j.signals.error.connect(failed);QtCore.QThreadPool.globalInstance().start(j)
 
     def fail(self,message):
-        self.statusBar().showMessage('Issue: '+message);W.QMessageBox.warning(self,'CAD-GIT',message)
+        self.statusBar().showMessage('Issue: '+message);W.QMessageBox.warning(self,'Git CAD',message)
+
+    def publication_status(self,result,message):
+        text=message+(' • '+result['publication_warning'] if result.get('publication_warning') else '')
+        self._publication_notice=text if result.get('publication_warning') else None
+        self.statusBar().showMessage(text)
 
     def refresh(self):
         self.history.clear();records=self.project.records();assemblies=self.project.records('assemblies')
@@ -167,7 +172,7 @@ class Window(W.QMainWindow):
         if count!=self._record_count:self.refresh()
         errors=list((self.project.root/'.cadgit/inbox').glob('*/error.json'))+list((self.project.root/'.cadgit/inbox').glob('*/failed.json'))
         if errors:self.issues.setText(f'{len(errors)} capture/export issue(s). See .cadgit/inbox for exact errors; history remains intact.')
-        self.setWindowTitle('CAD-GIT • '+self.project.config['name']+(' • watching saves' if status(self.project).get('running') else ''))
+        self.setWindowTitle('Git CAD • '+self.project.config['name']+(' • watching saves' if status(self.project).get('running') else ''))
 
     def history_clicked(self,item,column):
         ref=item.data(0,QtCore.Qt.UserRole)
@@ -195,7 +200,7 @@ class Window(W.QMainWindow):
             unsupported=info['unsupported_types']
             self.issues.setText('Basic material preview. '+('Unsupported display types: '+', '.join(unsupported) if unsupported else 'Original USD is retained; rendered mesh is only for inspection.'))
             self.details.setPlainText('ID  '+record['id']+'\n'+record['created_at']+'\n\n'+('Sample data • generated scene' if record.get('metadata',{}).get('sample_data') else 'Source lineage: '+str(record.get('parent') or 'baseline')))
-            self.statusBar().showMessage('Snapshot loaded • source data is unchanged')
+            self.statusBar().showMessage(self._publication_notice or 'Snapshot loaded • source data is unchanged')
             if self.screenshot:QtCore.QTimer.singleShot(800,self.save_screenshot)
         self.job(lambda:(meshes(path),stage_info(path)),show)
 
@@ -258,7 +263,7 @@ class Window(W.QMainWindow):
 
     def preview_draft(self):
         if not self.draft:return
-        draft=json.loads(json.dumps(self.draft))
+        draft=json.loads(json.dumps(self.draft));self.loading+=1;generation=self.loading
         def compute():
             parts=[]
             import numpy as np
@@ -268,6 +273,7 @@ class Window(W.QMainWindow):
                     p['points']=p['points']+np.array(s.get('translation',[0,0,0]));parts.append(p)
             return parts
         def show(parts):
+            if generation!=self.loading:return
             self.render(parts);self.record=None;self.scene.clear();self.record_title.setText('Assembly draft');self.subhead.setText(f'{len(draft)} selections · unsaved preview · main unchanged');self.statusBar().showMessage('Draft preview • Save assembly to create immutable output')
         self.job(compute,show)
 
@@ -275,20 +281,20 @@ class Window(W.QMainWindow):
         if not self.draft:return
         text,ok=W.QInputDialog.getText(self,'Save assembly','Assembly name:',text='New study')
         if not ok or not text.strip():return
-        selections=list(self.draft)
-        def done(r):self.refresh();self.load_record(r['id']);self.statusBar().showMessage('Assembly saved. Main remains unchanged until Set current as main.')
+        selections=json.loads(json.dumps(self.draft))
+        def done(r):self.refresh();self.load_record(r['id']);self.publication_status(r,'Assembly saved. Main remains unchanged until Set current as main.')
         self.job(lambda:assemble(self.project,selections,text.strip()),done)
 
     def set_main(self):
         if not self.record or not self.record['id'].startswith('assembly_'):return self.fail('Inspect a saved assembly first.')
-        try:self.project.set_main(self.record['id']);self.statusBar().showMessage('Main now points to '+self.record['label'])
+        try:result=self.project.set_main(self.record['id']);self.publication_status(result,'Main now points to '+self.record['label'])
         except Exception as exc:self.fail(str(exc))
 
     def ingest_dialog(self):
         path,_=W.QFileDialog.getOpenFileName(self,'Ingest a USD snapshot','','USD files (*.usd *.usda *.usdc *.usdz)')
         if not path:return
         source=self.source_combo.currentText()
-        self.job(lambda:self.project.ingest(path,source),lambda r:(self.refresh(),self.load_record(r['id'])))
+        self.job(lambda:self.project.ingest(path,source),lambda r:(self.refresh(),self.load_record(r['id']),self.publication_status(r,'Captured '+r['id'])))
 
     def export_dialog(self):
         if self.record_title.text()=='Assembly draft':return self.fail('Save the draft as an assembly before exporting.')
@@ -298,7 +304,7 @@ class Window(W.QMainWindow):
         selection=self.selected_path();ref=self.record['id']
         answer=W.QMessageBox.question(self,'Print export settings','Export authored polygon meshes in millimeters?\n\nSubdivision is exported as the base mesh. Open/nonmanifold geometry is rejected. Shader bump/displacement is not evaluated.\n\nSelection: '+str(selection or 'whole scene'))
         if answer!=W.QMessageBox.Yes:return
-        def done(r):self.statusBar().showMessage('STL saved • '+str(r['report']['dimensions'])+' mm');W.QMessageBox.information(self,'Print artifact saved',path+'\n\n'+json.dumps(r['report'],indent=2))
+        def done(r):self.publication_status(r,'STL saved • '+str(r['report']['dimensions'])+' mm');W.QMessageBox.information(self,'Print artifact saved',path+'\n\n'+json.dumps(r['report'],indent=2))
         self.job(lambda:export_stl(self.project,ref,path,selection,allow_base_mesh=True),done)
 
     def connect_apps(self):
@@ -339,5 +345,5 @@ class Window(W.QMainWindow):
 
 def launch(root,screenshot=None):
     app=W.QApplication.instance() or W.QApplication([])
-    app.setApplicationName('CAD-GIT');app.setOrganizationName('CAD-GIT')
+    app.setApplicationName('Git CAD');app.setOrganizationName('Git CAD')
     window=Window(Project(root),screenshot);window.show();return app.exec()

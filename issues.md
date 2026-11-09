@@ -12,16 +12,16 @@ entry's outcome and evidence to features.md History, retaining its ID there.
 
 ## Scope and priorities
 
-CAD-GIT focuses on history, lineage, materials, assembly and artifact management.
+Git CAD focuses on history, lineage, materials, assembly and artifact management.
 Reconstruction is an optional external provider, not a core release requirement.
 Issues #1, #3 and #4 preserve provider research findings; future implementation
 belongs in the [DualBrep fork](https://github.com/range-et/DualBrep). Issue #2 tracks
-the eventual thin CAD-GIT adapter. Core workflow improvements remain in #5–#10.
+the eventual thin Git CAD adapter. Core workflow improvements remain in #5–#10.
 
 ## #1 — DualBrep can return valid shells without a closed solid
 
 **Status:** Deferred to provider · **Priority:** P1 before that provider accepts
-solid results; not a CAD-GIT release blocker.
+solid results; not a Git CAD release blocker.
 
 On C110P, upstream `9707b4b4e531943f38e83092ff7ad833cc60b2cb`, sample
 `00013293`, resolution 256, rotation 3 produced 53 faces, six shells, zero solids.
@@ -45,7 +45,7 @@ solid. See [CUDA investigation](docs/DUALBREP_CUDA_INVESTIGATION.md).
 
 **Status:** Deferred · **Priority:** Roadmap.
 
-CAD-GIT currently prepares immutable jobs only. The separate
+Git CAD currently prepares immutable jobs only. The separate
 [DualBrep fork](https://github.com/range-et/DualBrep) is intended to become an
 independently versioned Docker service. Native CUDA smoke tests passed for selected
 candidates; no service image, Docker execution or Apple GPU support is qualified.
@@ -53,15 +53,15 @@ candidates; no service image, Docker execution or Apple GPU support is qualified
 **Acceptance:** probe Docker/provider/protocol/device compatibility; submit jobs
 on request; support logs, timeout and cancellation; verify result manifests and
 record derived artifacts with provenance. Missing or unsupported runtime reports
-reconstruction unavailable and does not block ordinary CAD-GIT workflows. Keep
-Torch, weights and OCC outside CAD-GIT. Platform-independent protocol does not
+reconstruction unavailable and does not block ordinary Git CAD workflows. Keep
+Torch, weights and OCC outside Git CAD. Platform-independent protocol does not
 imply every host supports the accelerator. No mandatory Mac backend port.
 See [service boundary](docs/DUALBREP.md).
 
 ## #3 — Reconstructed STEP scale and fidelity are not qualified
 
 **Status:** Deferred to provider · **Priority:** P1 before the provider claims
-manufacturing-scale output; not a CAD-GIT release blocker.
+manufacturing-scale output; not a Git CAD release blocker.
 
 Upstream outputs normalized coordinates. Job preparation records an inverse
 transform, but runtime application and manufacturing-unit STEP re-import are not
@@ -78,7 +78,7 @@ C110P has no matching libigl wheel in the tested Python environment and no C++
 compiler; the default point-cloud smoke path ran without libigl. Importing
 `lightning.pytorch` before OpenCASCADE STEP support reproduced a DLL failure.
 Separate pipeline processes worked. This does not establish support for all
-upstream modes or for CAD-GIT's Windows native adapters.
+upstream modes or for Git CAD's Windows native adapters.
 **Acceptance:** reproducible platform dependencies and fresh-process import tests;
 run reconstruction/OCC stages independently or demonstrate a verified alternative.
 See [CUDA evidence](docs/DUALBREP_CUDA_INVESTIGATION.md).
@@ -141,7 +141,7 @@ Formalize a third-party plugin contract/registry beyond bundled hooks and extern
 commands. Add explicit cache/staging cleanup and recovery tools that preserve
 pending captures and diagnostics. Qualify each supported native app/OS separately;
 the current reference service uses POSIX locking. Add MCP protocol smoke coverage
-when changing that interface. Do not treat CUDA Windows success as CAD-GIT portability.
+when changing that interface. Do not treat CUDA Windows success as Git CAD portability.
 
 ## #11 — Collaboration and deeper merge semantics
 
@@ -161,3 +161,177 @@ rows. Remaining work includes live save-hook/native renderer round trips, OS fil
 dialogs, keyboard/accessibility/visual sweeps, and explicitly listed GUI transitions
 not covered by core tests. Acceptance: each row has executable evidence or a named
 manual procedure with a recorded result; no blanket exhaustive-coverage claim.
+
+## #13 — Broaden layered verification beyond the compatibility boundary
+
+**Status:** Planned · **Priority:** Roadmap / test coverage.
+
+The scoped static/property/snapshot/mutation delivery is recorded in
+[features History](features.md) and the [verification guide](docs/TEST_VERIFICATION.md).
+This is remaining coverage work, not a reproduced product defect.
+**Next:** expand strict typing incrementally; add generated real-project operation
+sequences for immutable history, failure/recovery and pinned dependencies; extend
+mutation targets and reviewed serialization snapshots to storage/library boundaries.
+**Acceptance:** each added boundary has a bounded reproducible domain, independent
+oracle, measured mutation outcomes and explicit limits. Keep native/manual gaps
+under #12; do not represent this expansion as already delivered.
+
+## #16 — Entire-project line and mutation verification
+
+**Status:** Investigating · **Priority:** Roadmap / test quality.
+
+User requests 100% production Python line coverage and mutation verification for
+the entire project, starting with storage/history loss, links and failed saves.
+**Next:** inventory every production module, measure missing lines and mutants,
+add independent failure/invariant tests, fix reproduced defects, and audit every
+survivor without counting equivalent mutations or timeouts as kills.
+**Acceptance:** reproducible whole-source coverage and mutation reports, explicit
+native/environment boundaries, no untested lines hidden by exclusions, and tests
+that demonstrably reject destructive writes, broken links and false save success.
+Issue #13 tracks earlier incremental verification scope; this requested campaign
+is authoritative for the whole-project target.
+
+## #17 — Main selection reports failure after publishing a new pointer
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P1.
+
+Independent temporary-project probe: fail the second main-directory fsync during
+set_main. The call raises, current.json names the new assembly, and scene.usda is
+rolled back to the old assembly. **Next:** test pre/post-publication failures and
+make the returned outcome agree with the authoritative pointer. **Acceptance:**
+failed prepublication selection preserves old state; published selection returns
+its exact ID with a durability warning and a matching/recoverable projection.
+
+## #18 — Library verification ignores pinned parent links
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P2.
+
+Move the previous revision archive out of a temporary library after a real second
+revision is saved: verify(second) still returns ok=True. **Next:** verify parents
+as well as dependencies and test missing/corrupt/cyclic links. **Acceptance:** all
+pinned lineage links are checked with role-qualified errors and immutable payloads.
+
+## #19 — Library validation failure leaves stale enabled controls
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P2.
+
+Independent real-Qt probe: select a valid material, inject an OSError from verify,
+and reselect. _valid_selection becomes false but Use/Revise remain enabled;
+use_material does not check validity. **Next:** fail closed and test recovery.
+**Acceptance:** failed validation disables selection actions, emits no material
+assignment, and revalidation restores usable controls without modifying history.
+
+## #20 — Configuration events can claim changes that failed to save
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P2.
+
+Inject a prepublication cadgit.json write failure in branch/name_version: the call
+raises and config is unchanged, but a branch_selected/version_named event remains.
+**Next:** publish config before its success event and classify postpublication
+sync/event failures. **Acceptance:** failed saves leave no success event; published
+changes return explicit outcome/warnings and keep extension fields intact.
+
+## #21 — Native material provenance can reference an uncommitted capture
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P2.
+
+Fail snapshot commit after native material commit, then retry: reused material's
+snapshot_id names the failed attempt, which never existed in committed history.
+**Next:** record attempt provenance without asserting future snapshot existence;
+preserve existing manifests. **Acceptance:** new material manifests distinguish
+capture attempts from committed snapshot links; retries pin correct material IDs.
+
+## #22 — Record sync failure reports an already published save as failed
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P1.
+
+Inject fsync_dir failure after record-directory rename: library import raises but
+the revision is present and verifies. **Next:** return exact committed ID with an
+explicit durability warning after the publication point. **Acceptance:** before
+publication failures preserve originals; after publication results expose committed
+state and retries do not silently invent a replacement for a failed-save report.
+
+## #23 — GUI completion handlers hide publication durability warnings
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P2.
+
+Real Qt library probe: a committed material returns a directory-sync warning but
+changed_record shows only success. Config, context-main, ingestion, STL and B-rep
+handlers also discard warnings; assembly event failure can overwrite one.
+**Next:** retain successful IDs and show accumulated warnings. **Acceptance:**
+postpublication faults remain visibly distinct from uncommitted saves across
+completion/recovery paths, without duplicate retries or overwritten history.
+
+## #24 — Assembly manifest can disagree with its hashed recipe
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P2.
+
+Change a real assembly manifest's selection to another existing snapshot while
+leaving recipe.json intact: verification previously returned ok=True. **Next:**
+compare known recipe fields when the recipe is inventoried, while preserving
+legacy absence and unrelated additive fields. **Acceptance:** ID/transform/
+material/unknown-selection-data mismatches fail without rewriting either file.
+
+## #25 — Native handoff removes lineage after a published-file sync failure
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P1.
+
+Independent temporary-project probe fails destination-directory sync after the
+native output hard link. The output exists but create_native removes its lineage
+sidecar and raises. **Next:** tag publication errors with their exact destination,
+preserve sidecars once output exists, and test sidecar/output/event failure stages.
+**Acceptance:** returned publication warnings retain exact source lineage and
+existing output bytes; prepublication failures leave no orphan handoff files.
+
+## #27 — Ingestion succeeds with already corrupt parent history
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P2.
+
+Corrupt a real saved snapshot payload then ingest a fresh valid source on its
+branch: the returned child reports success but immediately fails verification.
+**Next:** validate branch tip/base before publication and reject damaged duplicate
+capture IDs without creating replacement history. **Acceptance:** failed lineage
+validation preserves the incoming source and existing records, emits no success
+event, and publishes no child linked to known damaged history.
+
+## #28 — Native image sidecars silently omit missing dependencies
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P2.
+
+A real capture with a declared image path that no longer exists succeeds and
+archives an empty image map. Regression initially failed because no error was
+raised. **Next:** reject missing declared inputs before committing the material;
+retain the incoming source. **Acceptance:** all declared image bytes are archived
+or capture fails visibly; later archive loss fails verification.
+
+## #29 — Corrupt branch config permits a cross-source save parent
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P2.
+
+Independent probe changes a real Rhino branch base to an existing Blender snapshot;
+Rhino ingestion and verification both succeed. **Next:** enforce same-source
+snapshot parents at ingest and verify, preserving cross-source imported_from.
+**Acceptance:** invalid save relationships fail without altering existing history;
+valid explicit imported provenance remains accepted.
+
+## #30 — Receipt recovery deletes frozen native input despite archive corruption
+
+**Status:** Implemented; final review reconciliation pending · **Priority:** P1.
+
+Real inbox capture committed before receipt, then its archive payload is damaged.
+process_inbox previously wrote a success receipt and deleted native_capture.3dm.
+Regression reproduced FileNotFoundError on the preserved-source assertion.
+**Next:** require healthy committed history before receipt recovery or deletion,
+verify retry behavior and independently audit. **Acceptance:** corrupt recovered
+captures retain native/USD inputs, publish no success receipt and report an error.
+
+## #39 — Intermittent GUI robustness failure remains unisolated
+
+**Status:** Watch · **Priority:** P2 verification gap.
+
+Full gate `20261109T221931.509389Z` exited1 in ui_robustness with only a font
+message; its sys.excepthook stored exceptions without printing them. **Next:**
+traceback reporting is fixed; standalone recheck and full gate
+`20261109T222731.086473Z` passed. Retain the watch entry and investigate any
+recurrence using its now-visible traceback; the original assertion is unisolated. **Acceptance:** failures retain actionable
+tracebacks, and the real GUI workflow passes with its relevant regression.

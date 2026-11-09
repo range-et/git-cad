@@ -19,7 +19,7 @@ def cadgit_recover_pending():
             if not isinstance(metadata.get('captured_at',''),str):raise ValueError('Invalid pending capture timestamp')
             pending.append((directory,metadata))
         except Exception as exc:
-            print('CAD-GIT pending capture recovery needs attention:',marker,str(exc))
+            print('Git CAD pending capture recovery needs attention:',marker,str(exc))
     pending.sort(key=lambda entry:(entry[1].get('sequence',0),entry[1].get('captured_at',''),entry[0].name))
     _cadgit_queue.extend(pending)
     _cadgit_queue.sort(key=lambda entry:(entry[1].get('sequence',0),entry[1].get('captured_at',''),entry[0].name))
@@ -66,10 +66,10 @@ def cadgit_export(doc,directory,metadata):
         (directory/'ready.tmp').write_text(json.dumps({'source':'rhino','branch':metadata.pop('branch',branch),'file':'scene.usda','label':metadata.get('document_name') or 'Rhino snapshot','metadata':metadata}))
         os.replace(directory/'ready.tmp',directory/'ready.json')
         (directory/'pending.json').unlink(missing_ok=True)
-        print('CAD-GIT Rhino snapshot ready')
+        print('Git CAD Rhino snapshot ready')
     except Exception as exc:
         (directory/'failed.json').write_text(json.dumps({'source':'rhino','error':str(exc),'traceback':traceback.format_exc()}))
-        print('CAD-GIT export failed:',exc)
+        print('Git CAD export failed:',exc)
 
 def cadgit_capture(trigger='user_save',document=None):
     doc_source=document or _cadgit_doc
@@ -148,7 +148,7 @@ cadgit_idle._cadgit_project=PROJECT
 cadgit_capture._cadgit_project=PROJECT
 old=scriptcontext.sticky.get('cadgit_save_handler')
 previous_project=getattr(old,'_cadgit_project',None) or getattr(old,'__globals__',{}).get('PROJECT')
-if previous_project and previous_project!=PROJECT:print('CAD-GIT switched Rhino capture from '+previous_project+' to '+PROJECT)
+if previous_project and previous_project!=PROJECT:print('Git CAD switched Rhino capture from '+previous_project+' to '+PROJECT)
 if old:Rhino.RhinoDoc.EndSaveDocument-=old
 old_idle=scriptcontext.sticky.get('cadgit_idle_handler')
 if old_idle:Rhino.RhinoApp.Idle-=old_idle
@@ -158,4 +158,4 @@ scriptcontext.sticky['cadgit_save_handler']=cadgit_saved
 scriptcontext.sticky['cadgit_idle_handler']=cadgit_idle
 scriptcontext.sticky['cadgit_capture']=cadgit_capture
 scriptcontext.sticky['cadgit_active_project']=PROJECT
-print('CAD-GIT save hook attached to Rhino; project:',PROJECT)
+print('Git CAD save hook attached to Rhino; project:',PROJECT)

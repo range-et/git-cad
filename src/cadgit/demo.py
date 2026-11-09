@@ -53,7 +53,7 @@ def create_library(project):
     library=Library(project)
     existing=[r for r in library.records() if r['kind']=='material' and 'demo_library' in r.get('tags',[])]
     if existing:return existing[-1]
-    provenance={'provider':'CAD-GIT generated demo','license':{'name':'Project-generated sample'},'notes':'Not manufacturer material data; all engineering values remain unspecified.'}
+    provenance={'provider':'Git CAD generated demo','license':{'name':'Project-generated sample'},'notes':'Not manufacturer material data; all engineering values remain unspecified.'}
     with tempfile.TemporaryDirectory() as directory:
         root=Path(directory);image=root/'surface-pattern.png'
         def pattern(a,b):

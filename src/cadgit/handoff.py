@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json, os, shutil, subprocess, sys
 from pathlib import Path
+from .errors import PublishedWriteError
 from .store import CadgitError, atomic_json, uid, now,read_json,publish_file
 
 
@@ -112,10 +113,20 @@ def create_native(project, ref, target, output, launch=True):
             argv=target.get('command')
             command=[x.replace('{usd}',str(output)) for x in argv]
         # Publish ancestry before the normal native file becomes available for opening.
-        atomic_json(sidecar,lineage,replace=False);sidecar_published=True
-        publish_file(staged,output);file_published=True
+        warnings=[]
+        try:atomic_json(sidecar,lineage,replace=False)
+        except PublishedWriteError as exc:
+            if exc.destination!=str(sidecar):raise
+            warnings.append(str(exc))
+        sidecar_published=True
+        try:publish_file(staged,output)
+        except PublishedWriteError as exc:
+            if exc.destination!=str(output):raise
+            warnings.append(str(exc))
+        file_published=True
+        if warnings:lineage['publication_warning']='; '.join(warnings)
         try:project.event('native_handoff',lineage)
-        except OSError as exc:lineage['publication_warning']='Native file created; event could not be written: '+str(exc)
+        except OSError as exc:lineage['publication_warning']='; '.join(filter(None,[lineage.get('publication_warning'),'Native file created; event could not be written: '+str(exc)]))
     except Exception:
         if sidecar_published and not file_published:sidecar.unlink(missing_ok=True)
         raise

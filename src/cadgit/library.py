@@ -43,7 +43,7 @@ class Library:
         if marker.exists():
             data=read_json(marker);check_compatibility(data,'Asset library')
             if data.get('project_id')!=self.project.config['id']:raise CadgitError('Asset library belongs to a different project')
-        elif self.root.exists() and any(self.root.iterdir()):raise CadgitError('Existing library/ is not a CAD-GIT library; its files were not changed')
+        elif self.root.exists() and any(self.root.iterdir()):raise CadgitError('Existing library/ is not a Git CAD library; its files were not changed')
         elif write:
             self.root.mkdir(parents=True,exist_ok=True)
             atomic_json(marker,{'schema_version':1,'project_id':self.project.config['id'],'kind':'asset_library'},replace=False)
@@ -93,18 +93,16 @@ class Library:
     def verify(self,revision,stack=None):
         try:record=self.get(revision)
         except CadgitError as exc:return {'id':revision,'ok':False,'errors':[str(exc)]}
-        stack=set(stack or ())
-        if revision in stack:return {'id':revision,'ok':False,'errors':['Cyclic library dependency']}
-        stack.add(revision);result=self.project.verify(record)
-        errors=list(result['errors'])
+        from .verification import verify_dependencies
+        return verify_dependencies(self.project,record,library=True,ancestors=stack)
+    def _verify_local(self,record):
+        errors=[]
         if not record.get('legacy') and record.get('entry_layer')=='definition.json':
             try:
                 if read_json(self.project.stage_path(record))!=record.get('definition',{}):errors.append('Definition differs from its hashed payload')
             except CadgitError as exc:errors.append(str(exc))
-        for dependency in record.get('dependencies',[]):
-            checked=self.verify(dependency['revision_id'],stack)
-            if not checked['ok']:errors.append(dependency['role']+': '+'; '.join(checked['errors']))
-        return {'id':revision,'ok':not errors,'errors':errors}
+        links=[('library',dependency['revision_id'],dependency['role']) for dependency in [*record.get('parents',[]),*record.get('dependencies',[])]]
+        return errors,links
     def _require(self,revision,kinds=None):
         record=self.get(revision)
         if kinds and record['kind'] not in kinds:raise CadgitError('Wrong asset kind for reference '+revision)

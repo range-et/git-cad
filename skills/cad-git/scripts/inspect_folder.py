@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only onboarding inventory. No CAD-GIT installation or native app required."""
+"""Read-only onboarding inventory. No Git CAD installation or native app required."""
 import argparse
 import json
 import os
@@ -80,7 +80,7 @@ def inspect_folder(folder,limit=200):
         'nested_project_configs':nested,
         'candidates':groups,'symlinks_not_followed':{'count':symlink_count,'paths':symlinks},
         'warnings':warnings,'path_limit_per_group':limit,
-        'note':'Read-only inventory; CAD-GIT status/init and actual exports provide validation. Native files and dependencies were not opened or modified. Classify .blend candidates as scenes or shader libraries before capture/import.',
+        'note':'Read-only inventory; Git CAD status/init and actual exports provide validation. Native files and dependencies were not opened or modified. Classify .blend candidates as scenes or shader libraries before capture/import.',
     }
 
 

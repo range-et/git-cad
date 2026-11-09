@@ -17,7 +17,7 @@ This is a prototype capability inventory, not a claim that the entire
 | Direct artifacts | USD and STL export from saved scenes/assemblies, unit conversion, topology diagnostics and lineage | No printability certification, boolean union or evaluated renderer displacement. [README](README.md) |
 | Integrity and compatibility | Hash inventories, staged publication, local writer lock, recovery, additive optional fields and explicit required-feature rejection | USD alone does not guarantee application-schema compatibility. [Contract](docs/DATA_COMPATIBILITY.md) |
 | CLI, optional MCP and onboarding | CLI works without AI; optional stdio MCP; agent-agnostic portbook covers scenes and materials | [Skill](skills/cad-git/SKILL.md), [tool contract](skills/cad-git/references/tool-contract.md) |
-| App identity | CAD-GIT application name, icon assets and launcher | [README](README.md) |
+| App identity | Git CAD application name, icon assets and launcher | [README](README.md) |
 
 ## November 9 implementation update
 
@@ -30,13 +30,79 @@ imply that deferred native/manual release gates have passed.
   synchronous. [Evidence](docs/VIEWPORT_LOADING.md).
 - **B-rep job preparation:** immutable per-part inputs, lineage, unit/normalization
   metadata, explicit component splitting, verification, CLI/UI preparation and
-  CUDA prerequisite diagnostics. **No inference or STEP export in CAD-GIT yet.**
+  CUDA prerequisite diagnostics. **No inference or STEP export in Git CAD yet.**
   [Scope and audit](docs/REVIEW_DUALBREP_PREPARATION.md).
 - **Engineering gates:** repeatable core/CLI/wheel/GUI runner, source-drift checks,
   scoped independent review requirements and CI definition. Hosted CI and native
   qualification are separate from local checks. [Gates](docs/BUILD_GATES.md).
 
 ## History
+
+### 2026-11-09 — Verified traversal, recovery and save outcomes
+
+Local working-tree fixes with independent scoped rechecks and full selected gate
+`20261109T222731.086473Z`:461 core tests/four snapshots, CLI/wheel, nine graphical
+suites, MCP and scoped compatibility mutations passed. [Evidence](docs/REVIEW_FULL_VERIFICATION.md).
+
+- **#26:** iterative verification checks shared ancestors once and handles80 real
+  snapshots under constrained recursion; duplicate and corrupt dependencies stay
+  visible. This is bounded evidence, not arbitrary-size performance qualification.
+- **#31–#34:** receipt recovery uses exact source/capture identity, verifies input
+  digests before cleanup, preserves legacy inputs without fabricated hashes,
+  tolerates malformed legacy IDs and rejects symlinked inbox escape paths.
+  Both original P1 probes independently passed; producers must cooperate with
+  the immutable-ready contract.
+- **#35:** autosnapshot CLI and application-target settings use shared locked
+  publication outcomes, preserve additive config fields and expose committed-save
+  warnings. Real dialog failure/retry checks passed.
+- **#36:** external runtime diagnostics validate JSON shape and cannot enable
+  inference by overriding execution support. Nine focused runtime cases passed.
+- **#38:** legacy UI freezes queued recipes, keeps publication warnings visible
+  after asynchronous loads and rejects stale preview completions. Real Qt/VTK
+  regression and independent handler rechecks passed.
+
+Whole-project line/mutation completion remains #16; intermittent GUI investigation
+remains #39. These results do not qualify live Rhino or constitute publication.
+
+### 2026-11-09 — Git CAD naming alignment (#37)
+
+Public branding, distribution and canonical command now match `range-et/git-cad`:
+**Git CAD / `git-cad`**. Added `Open Git CAD.command`; the old launcher and `cad-git`
+command remain compatible. Internal package/archive identifiers, saved settings,
+Git-rule sentinels and resource paths remain unchanged. Actual wheel entrypoint,
+identity, CLI and MCP checks passed; independent QA/UX naming rechecks passed.
+This records local working-tree changes, not publication. [Evidence](docs/REVIEW_FULL_VERIFICATION.md#git-cad-naming-and-legacy-ui-follow-up).
+
+### 2026-11-09 — Executable survivor assessment (#15)
+
+Added six meta-tests comparing the exact two surviving compatibility edits with
+the baseline, checking strict typing, and proving the existing oracle rejects
+three behavior-changing controls. The cast edit is rejected by mypy but is
+runtime-neutral; the missing-minor default edit remains equivalent for ordinary
+JSON records. Independent CI/deep runs passed; final core run passed 214 tests.
+Mutmut's runtime score remains honestly 55/57. See
+[scope](docs/TEST_VERIFICATION.md#testing-the-survivor-assessment-15) and
+[review evidence](docs/REVIEW_TEST_VERIFICATION.md#follow-up-survivor-audit-15).
+
+### 2026-11-09 — Dialog test-process cleanup (#14)
+
+A full gate exposed an intermittent Qt abort after all 46 dialog assertions.
+The harness now drains workers and explicitly destroys retained windows before
+Python shutdown; its success marker follows cleanup. Added a gate regression for
+success output followed by native abort. Parent and independent architecture
+standalone rechecks passed; final full-run status is recorded in
+[verification evidence](docs/REVIEW_TEST_VERIFICATION.md). No product UI behavior
+changed and no universal shutdown-reliability claim is made.
+
+### 2026-11-09 — Scoped layered verification (#13)
+
+Added scoped Ruff and strict mypy checks, generated compatibility/model contract
+cases, two legacy serialization snapshots, coverage diagnostics and an isolated
+compatibility mutation gate (95% floor). CI also runs the real MCP smoke. This is
+local source capability; hosted results and repository-wide strictness are not
+claimed. [Scope/commands](docs/TEST_VERIFICATION.md),
+[review and gate evidence](docs/REVIEW_TEST_VERIFICATION.md). Broader adoption
+remains open as #13; native/manual workflow coverage remains #12.
 
 ### 2026-11-09 — Finite user-workflow test expansion
 
@@ -53,10 +119,10 @@ now verify through the shared core, with corruption and unsafe-path regressions.
 ### 2026-11-09 — Optional provider scope decision
 
 B-rep reconstruction belongs in the separate DualBrep fork, potentially packaged
-as a Docker service. CAD-GIT may later submit jobs and track results through a
+as a Docker service. Git CAD may later submit jobs and track results through a
 thin adapter; an unsupported runtime reports unavailable. Neither the service nor
 Docker integration is implemented. Apple acceleration and reconstruction research
-are not CAD-GIT release gates. See [scope contract](docs/DUALBREP.md).
+are not Git CAD release gates. See [scope contract](docs/DUALBREP.md).
 
 ### 2026-11-09 — Tracking documents and CUDA evidence
 
@@ -68,7 +134,7 @@ Upstream DualBrep was exercised separately on C110P (RTX 5070 Ti): CUDA operatio
 AE reconstruction and parametrization passed; sample `00030157` produced an
 independently re-imported valid solid (one shell, 25 faces). Sample `00013293` at
 resolution 256/rotation 3 produced six shells and zero solids. This is backend
-research, **not an enabled CAD-GIT feature or a general success-rate estimate**.
+research, **not an enabled Git CAD feature or a general success-rate estimate**.
 Follow-up rotations 0 and 7 sealed the first sample too; candidate selection and
 fidelity qualification remain open. Units remain normalized. See [diagnostics](docs/DUALBREP_CUDA_INVESTIGATION.md),
 issues #1–#4 for remaining work.

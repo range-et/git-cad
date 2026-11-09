@@ -14,14 +14,14 @@ Use the read-only inspector, then map the chosen inputs into these roles:
 | Native working `.3dm` / scene `.blend` | Geometry baseline through its chosen application. |
 | Shader-library `.blend`, `.mtlx`, `.sbsar` | Independent shader asset; archive support is not proof of renderer compatibility. |
 | PNG/JPEG/TIFF/EXR/HDR | Independent image asset; confirm map role and color space rather than infer physical properties. |
-| PDF/text/CSV/JSON material evidence | Specification/document asset; do not interpret arbitrary JSON as a CAD-GIT definition. |
+| PDF/text/CSV/JSON material evidence | Specification/document asset; do not interpret arbitrary JSON as a Git CAD definition. |
 | Existing physical data / authored appearance | Explicit logical material definition with units, sources and pinned asset refs. |
 | ZIP download | Keep opaque or have the user extract separately; V1 does not extract archives. |
 
 One material can use many images; one image can be reused by many materials. Do
 not identify continuing assets just by matching filenames or content hashes.
 Retain original folder organization and linked dependencies. A pre-existing
-`library/` or `materials/` can force a new CAD-GIT child root, not a move/deletion.
+`library/` or `materials/` can force a new Git CAD child root, not a move/deletion.
 The inspector excludes recognized generated libraries/history from new candidates.
 
 Before writing, identify which files are new assets versus new revisions of known

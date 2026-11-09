@@ -47,7 +47,7 @@ def write_mesh_ply(path,mesh):
     points=np.asarray(mesh.points,dtype='<f8');triangles=mesh.faces.reshape(-1,4)[:,1:]
     faces=np.empty(len(triangles),dtype=[('count','u1'),('vertices','<i4',(3,))])
     faces['count']=3;faces['vertices']=triangles
-    header=('ply\nformat binary_little_endian 1.0\ncomment CAD-GIT world meters Z-up\n'
+    header=('ply\nformat binary_little_endian 1.0\ncomment Git CAD world meters Z-up\n'
             f'element vertex {len(points)}\nproperty double x\nproperty double y\nproperty double z\n'
             f'element face {len(faces)}\nproperty list uchar int vertex_indices\nend_header\n')
     with Path(path).open('wb') as stream:stream.write(header.encode('ascii'));stream.write(points.tobytes());stream.write(faces.tobytes())
@@ -63,7 +63,7 @@ def collection(project,create=False):
         if marker.exists():
             metadata=read_json(marker)
             if not isinstance(metadata,dict) or metadata.get('project_id')!=project.config['id']:raise CadgitError('B-rep jobs belong to another project')
-        elif any(root.iterdir()):raise CadgitError('Existing brep_jobs folder is not owned by CAD-GIT')
+        elif any(root.iterdir()):raise CadgitError('Existing brep_jobs folder is not owned by Git CAD')
     if create:
         root.mkdir(parents=True,exist_ok=True)
         if not marker.exists():atomic_json(marker,{'project_id':project.config['id'],'schema_version':1},replace=False)
@@ -210,7 +210,10 @@ print("CADGIT_RUNTIME="+json.dumps(r))
             probe=subprocess.run([str(python),'-I','-c',code],capture_output=True,text=True,timeout=45)
             lines=[line for line in probe.stdout.splitlines() if line.startswith('CADGIT_RUNTIME=')]
             if probe.returncode or not lines:raise ValueError('Runtime probe failed: '+probe.stderr[-1000:])
-            result.update(json.loads(lines[-1].split('=',1)[1]))
+            payload=json.loads(lines[-1].split('=',1)[1])
+            if not isinstance(payload,dict) or type(payload.get('cuda')) is not bool or type(payload.get('mps')) is not bool or not isinstance(payload.get('missing'),list) or any(not isinstance(item,str) for item in payload['missing']):raise ValueError('Invalid runtime probe report')
+            if any(key in payload and not isinstance(payload[key],str) for key in ('torch','cuda_device')):raise ValueError('Invalid runtime probe report')
+            result.update({key:payload[key] for key in ('cuda','mps','missing','torch','cuda_device') if key in payload})
         except (OSError,ValueError,subprocess.TimeoutExpired) as exc:result['missing'].append(str(exc))
     if not checkout:result['missing'].append('No DualBrep checkout configured')
     else:

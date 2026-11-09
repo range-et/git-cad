@@ -8,7 +8,10 @@ from PySide6.QtTest import QTest
 app=ui.W.QApplication([]);app.setQuitOnLastWindowClosed(False)
 project=create(Path(tempfile.mkdtemp())/'ui-robustness')
 errors=[];unhandled=[]
-sys.excepthook=lambda kind,error,tb:unhandled.append(str(error))
+def report_unhandled(kind,error,tb):
+    unhandled.append(str(error))
+    sys.__excepthook__(kind,error,tb)
+sys.excepthook=report_unhandled
 window=ui.Window(project);window.fail=lambda message:errors.append(str(message));window.show()
 
 def settle(window):

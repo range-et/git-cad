@@ -1,4 +1,4 @@
-CAD-GIT / DualBrep prepared inputs
+Git CAD / DualBrep prepared inputs
 
 STATUS: PREPARED ONLY. No inference has run and this bundle contains no STEP.
 Keep this committed bundle immutable. Copy inputs into a separate runtime work
@@ -12,7 +12,7 @@ may change the interpretation of cavities or nested bodies.
 
 An external environment needs the pinned DualBrep code, its dependencies and the
 pc_vae / parametrizer checkpoints. The published environment uses CUDA. Do not
-install its Torch/OCC dependencies into CAD-GIT's environment. runtime.example.json
+install its Torch/OCC dependencies into Git CAD's environment. runtime.example.json
 is a template, not an active service configuration. No models are downloaded here.
 
 Future adapter stages: point-cloud autoencoder (not generative diffusion), face

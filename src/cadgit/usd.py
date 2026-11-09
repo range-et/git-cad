@@ -3,6 +3,7 @@ import math, os, shutil, struct
 from pathlib import Path
 import numpy as np
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
+from .errors import PublishedWriteError
 from .store import CadgitError, atomic_json, now, uid,publish_file
 from .models import Assembly, Selection
 from .compatibility import check_compatibility
@@ -279,7 +280,7 @@ def export_stl(project, ref, output=None, select=None, units="mm", allow_issues=
         # Binary STL writer; source geometry has already been structurally validated.
         normals = cross / np.linalg.norm(cross, axis=1)[:,None]
         with target.open("wb") as f:
-            f.write(b"CAD-GIT; numeric units recorded in manifest".ljust(80,b" "))
+            f.write(b"Git CAD; numeric units recorded in manifest".ljust(80,b" "))
             f.write(struct.pack("<I", len(triangles)))
             for normal, ids in zip(normals, triangles):
                 f.write(struct.pack("<12fH", *normal.tolist(), *points[ids].ravel().tolist(), 0))
@@ -288,6 +289,9 @@ def export_stl(project, ref, output=None, select=None, units="mm", allow_issues=
         result = project.commit(staging, project.root / "artifacts/prints" / aid, r)
         if output:
             try:publish_file(Path(result['_directory'])/'part.stl',output)
+            except PublishedWriteError as exc:
+                if exc.destination!=str(Path(output).expanduser().absolute()):raise
+                result['publication_warning']='; '.join(filter(None,[result.get('publication_warning'),str(exc)]))
             except Exception as exc:raise CadgitError(f'Artifact {result["id"]} is committed; output publication failed: {exc}. Export it to a new destination.') from exc
         return result
 
@@ -307,5 +311,9 @@ def export_usd(project,ref,output):
             if not UsdUtils.CreateNewUsdzPackage(Sdf.AssetPath(str(project.stage_path(record))),str(staged)):raise CadgitError('USD dependency packaging failed')
         elif not open_stage(project.stage_path(record)).Export(str(staged)):raise CadgitError('USD export failed')
         if not Usd.Stage.Open(str(staged)):raise CadgitError('Exported USD validation failed')
-        publish_file(staged,output)
-    return {'output':str(output),'source_id':record['id'],'mode':'packaged' if output.suffix.lower()=='.usdz' else 'flattened'}
+        result={'output':str(output),'source_id':record['id'],'mode':'packaged' if output.suffix.lower()=='.usdz' else 'flattened'}
+        try:publish_file(staged,output)
+        except PublishedWriteError as exc:
+            if exc.destination!=str(output):raise
+            result['publication_warning']=str(exc)
+    return result

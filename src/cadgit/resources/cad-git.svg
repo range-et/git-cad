@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <title>CAD-GIT</title>
+  <title>Git CAD</title>
   <desc>A solid cube connected to a branching version history on a dark tile.</desc>
   <rect x="32" y="32" width="960" height="960" rx="216" fill="#151a20"/>
   <path d="M32 776V248C32 129 129 32 248 32h528c119 0 216 97 216 216v528c0 119-97 216-216 216H248C129 992 32 895 32 776Z" fill="none" stroke="#34434f" stroke-width="12"/>

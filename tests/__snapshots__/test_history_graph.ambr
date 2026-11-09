@@ -1,0 +1,180 @@
+# serializer version: 1
+# name: test_crossing_save_import_and_assembly_edges_keep_stable_columns
+  dict({
+    'columns': list([
+      tuple(
+        'd2',
+        0,
+      ),
+      tuple(
+        'c2',
+        2,
+      ),
+      tuple(
+        'combined',
+        3,
+      ),
+      tuple(
+        'b2',
+        3,
+      ),
+      tuple(
+        'a2',
+        1,
+      ),
+      tuple(
+        'd1',
+        0,
+      ),
+      tuple(
+        'c1',
+        2,
+      ),
+      tuple(
+        'b1',
+        3,
+      ),
+      tuple(
+        'a1',
+        4,
+      ),
+      tuple(
+        'd0',
+        0,
+      ),
+      tuple(
+        'c0',
+        2,
+      ),
+      tuple(
+        'b0',
+        1,
+      ),
+      tuple(
+        'a0',
+        5,
+      ),
+    ]),
+    'width': 6,
+  })
+# ---
+# name: test_graph_complete_public_topology_and_reference_contract
+  dict({
+    'column_count': 3,
+    'cyclic': list([
+    ]),
+    'edges': list([
+      dict({
+        'child': 'main',
+        'kind': 'save',
+        'parent': 'base',
+      }),
+      dict({
+        'child': 'fork',
+        'kind': 'save',
+        'parent': 'base',
+      }),
+      dict({
+        'child': 'assembly',
+        'kind': 'assembly',
+        'parent': 'fork',
+      }),
+      dict({
+        'child': 'assembly',
+        'kind': 'assembly',
+        'parent': 'blender',
+      }),
+    ]),
+    'lanes': list([
+      tuple(
+        'assembly',
+        'main',
+      ),
+      tuple(
+        'blender',
+        'main',
+      ),
+      tuple(
+        'rhino',
+        'alternative',
+      ),
+      tuple(
+        'rhino',
+        'main',
+      ),
+    ]),
+    'missing': list([
+    ]),
+    'nodes': list([
+      dict({
+        'column': 0,
+        'id': 'main',
+        'lane': 3,
+        'refs': list([
+          dict({
+            'branch': 'main',
+            'kind': 'head',
+            'label': 'rhino/main',
+            'source': 'rhino',
+          }),
+        ]),
+      }),
+      dict({
+        'column': 1,
+        'id': 'assembly',
+        'lane': 0,
+        'refs': list([
+          dict({
+            'kind': 'main',
+            'label': 'main',
+          }),
+        ]),
+      }),
+      dict({
+        'column': 2,
+        'id': 'blender',
+        'lane': 1,
+        'refs': list([
+          dict({
+            'branch': 'main',
+            'kind': 'head',
+            'label': 'blender/main • HEAD',
+            'source': 'blender',
+          }),
+        ]),
+      }),
+      dict({
+        'column': 1,
+        'id': 'fork',
+        'lane': 2,
+        'refs': list([
+          dict({
+            'branch': 'alternative',
+            'kind': 'head',
+            'label': 'rhino/alternative • HEAD',
+            'source': 'rhino',
+          }),
+        ]),
+      }),
+      dict({
+        'column': 0,
+        'id': 'base',
+        'lane': 3,
+        'refs': list([
+          dict({
+            'kind': 'version',
+            'label': 'Baseline',
+          }),
+          dict({
+            'branch': 'future',
+            'kind': 'head',
+            'label': 'rhino/future',
+            'source': 'rhino',
+          }),
+        ]),
+      }),
+    ]),
+    'warnings': list([
+    ]),
+  })
+# ---
